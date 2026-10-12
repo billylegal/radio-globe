@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Radio Globe</title>
+<link rel="stylesheet" href="style.css?v=1791818295">
+</head>
+<body>
+<div id="globe"></div>
+
+<div id="bullseye"><svg viewBox="-56 -56 112 112" width="112" height="112" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round">
+  <circle r="10"/>
+  <path d="M0-47V-10M0 10V47M-47 0H-10M10 0H47"/>
+  <circle r="2.4" fill="#39ff14" stroke="none"/>
+</svg></div>
+<div id="loading"><div class="spinner"></div><div id="loadmsg">Loading stations…</div></div>
+
+<aside id="side">
+  <div class="brand"><span class="logo">◉</span> Radio Globe <button id="themeBtn" title="Theme colors"><i class="tdot"></i> Theme</button></div>
+  <input id="gsearch" type="search" placeholder="Search genres… (house, jazz, salsa)" autocomplete="off">
+  <div id="bands"></div>
+  <label class="chk"><input type="checkbox" id="playable"> Playable only (hide broadcast-only listings)</label>
+  <div id="genres"></div>
+</aside>
+
+<div id="searchwrap">
+  <input id="ssearch" type="search" placeholder="Search stations, cities, countries…" autocomplete="off">
+  <div id="sresults" class="hidden"></div>
+</div>
+<div id="topbar">
+  <button id="livebtn" title="Everything live right now"><i class="ldot"></i> LIVE NOW <span id="livecount"></span></button>
+  <button id="rotate" title="Toggle auto-rotate">Spin</button>
+  <button id="spaceBtn" title="Spaced out: hide the globe, show only the station dots">Spaced out</button>
+  <button id="favtop" title="Your favorites">★ Favorites <span id="favtopn">0</span></button>
+  <button id="random" title="Random station in this genre (N)">🎲 Random</button>
+</div>
+<div id="themepop" class="hidden"><h4>Theme color</h4><div class="sw" id="themesw"></div></div>
+</div>
+
+<section id="panel" class="hidden">
+  <header><div><div id="ptitle"></div><div id="psub"></div></div><button id="pclose">✕</button></header>
+  <div id="pdetail" class="hidden"></div>
+  <div id="plist"></div>
+</section>
+
+<section id="favdrawer">
+  <header><div class="ft">★ Favorites <span id="favcount">0</span></div>
+    <label class="chk"><input type="checkbox" id="favonly"> Show only favorites on the globe</label>
+    <button id="favclose" title="Close">⌄</button></header>
+  <div id="favlist"></div>
+</section>
+
+<footer id="player">
+  <div id="plogo"></div>
+  <div class="info"><div id="pname">Pick a glowing dot on the globe</div><div id="pmeta">Rotate, zoom, choose a genre</div></div>
+  <button id="favBtn" class="sbtn" disabled title="Favorite this station">☆</button>
+  <button id="shareBtn" class="sbtn" disabled title="Share this station"><svg class="shic" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="2.7"/><circle cx="6" cy="12" r="2.7"/><circle cx="18" cy="19" r="2.7"/><path d="M8.4 10.7l7.2-4.1M8.4 13.3l7.2 4.1"/></svg></button>
+  <button id="pplay" disabled>▶</button>
+  <input id="vol" type="range" min="0" max="1" step="0.01" value="0.8" title="Volume">
+</footer>
+
+<div id="attr">Imagery © Esri, Maxar, Earthstar Geographics · NASA Blue Marble · Stations: radio-browser.info, Wikidata · Cities: GeoNames</div>
+<div id="ytbox" aria-hidden="true"><div id="ytplayer"></div></div>
+<div id="stat"></div>
+<div id="toast" class="hidden"></div>
+<audio id="audio" preload="none"></audio>
+
+<script src="vendor/globe.gl.min.js"></script>
+<script src="vendor/hls.min.js"></script>
+<script src="app.js?v=1791818295"></script>
+</body>
+</html>
