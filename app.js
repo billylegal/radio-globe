@@ -605,7 +605,7 @@
   setSpaced(true);
   {
     const up = S.find(isUP);
-    const tap = document.createElement('div'); tap.id = 'tapStart'; tap.textContent = '▶ Tap anywhere to start 1UP Radio'; tap.style.display = 'none'; document.body.appendChild(tap);
+    const tap = document.createElement('div'); tap.id = 'tapStart'; tap.textContent = '▶ Tap to start 1UP Radio'; tap.style.display = 'none'; document.body.appendChild(tap);
     let muted = false;
     const unlock = () => {
       try { if (yt && yt.unMute) { yt.unMute(); yt.setVolume(Math.round(+$('vol').value * 100)); if (!ytPlaying) yt.playVideo(); } else if (up && !ytOn) play(up, false); } catch (e) {}
@@ -614,6 +614,8 @@
     ['pointerdown', 'keydown', 'touchstart'].forEach(ev => addEventListener(ev, () => { if (tap.style.display !== 'none' || muted) unlock(); }, { passive: true }));
     if (up) {
       play(up, false);
+      ctl.autoRotate = false; autoRotate = false; $('rotate').style.opacity = .5;
+      globe.pointOfView({ lat: up[2], lng: up[3], altitude: 0.28 }, 2600);   // fly straight in to where 1UP Radio is
       setTimeout(() => {   // browsers block sound before the first tap: fall back to muted autoplay, then unmute on the first touch
         if (ytPlaying || ytMode !== 'up') return;
         try { if (yt && yt.mute) { yt.mute(); yt.playVideo(); muted = true; } } catch (e) {}
