@@ -486,20 +486,33 @@
   }
   // 1UP Radio: follows the live schedule published at 1upradio.com
   const upNow = () => { let k = 0; const src = Date.now() / 1000 - (upS.delay || 0); for (let i = 0; i < upS.plays.length; i++) { if (upS.plays[i].t <= src) k = i; else break; } return k; };
+  let upTimer = null;
+  function upClear() { if (upTimer) { clearTimeout(upTimer); upTimer = null; } }
   function upPlayIdx(i, offset) {
+    upClear();
     const pl = upS.plays; if (!pl.length) return;
     if (i >= pl.length) { i = Math.max(0, pl.length - 40 + ((Math.random() * 30) | 0)); offset = 0; }
     upIdx = i; const p = pl[i], k = p.title.indexOf(' - ');
     $('pname').textContent = '1UP Radio - Keep the Volume Up';
     $('pmeta').textContent = (k > 0 ? p.title.slice(k + 3) + ' · ' + p.title.slice(0, k) : p.title) + ' · live schedule';
-    offset = Math.max(0, Math.floor(offset || 0)); if (offset > p.dur - 25) { offset = 0; upIdx = Math.min(i + 1, pl.length - 1); }
-    yt.loadVideoById({ videoId: pl[upIdx].id, startSeconds: upIdx === i ? offset : 0 });
+    offset = Math.max(0, Math.floor(offset || 0));
+    if (offset > p.dur - 5 && i + 1 < pl.length) { upNext(); return; }     // song is basically over: wait for the next slot
+    yt.loadVideoById({ videoId: p.id, startSeconds: offset });
+  }
+  // the next song starts exactly when the schedule says it begins (never early), so this stays in step with 1upradio.com
+  function upNext() {
+    const n = upIdx + 1;
+    if (n >= upS.plays.length) { upPlayIdx(n, 0); return; }
+    const wait = (upS.plays[n].t + (upS.delay || 0)) - Date.now() / 1000;
+    upClear();
+    if (wait > 1) upTimer = setTimeout(() => { upTimer = null; upPlayIdx(n, 0); }, wait * 1000);
+    else upPlayIdx(n, Math.max(0, -wait));
   }
   async function upStart() {
     if (!upS) upS = await (await fetch('https://1upradio.com/schedule.json?t=' + Date.now())).json();
     const k = upNow(); upIdx = k; return [k, Date.now() / 1000 - (upS.delay || 0) - upS.plays[k].t];
   }
-  const ytNext = () => { if (ytMode === 'up') upPlayIdx(upIdx + 1, 0); else ytPlayPos(ytPos + 1); };
+  const ytNext = () => { if (ytMode === 'up') upNext(); else ytPlayPos(ytPos + 1); };
   async function ytStart(mode) {
     ytMode = mode || 'bl'; ytOn = true; ytErr = 0;
     let first;
@@ -520,12 +533,14 @@
     } catch (e) {}
   }, 180000);
   setInterval(() => {
-    if (!ytOn || ytMode !== 'up' || !ytPlaying || !upS || upIdx < 0 || !upS.plays[upIdx] || Date.now() - upLast < 20000) return;
+    if (!ytOn || ytMode !== 'up' || !ytPlaying || !upS || upIdx < 0 || !upS.plays[upIdx] || upTimer || Date.now() - upLast < 20000) return;
     try {
-      const expected = Date.now() / 1000 - (upS.delay || 0), actual = upS.plays[upIdx].t + yt.getCurrentTime();
-      if (Math.abs(actual - expected) > 30) { const k = upNow(); upLast = Date.now(); upPlayIdx(k, expected - upS.plays[k].t); }
+      const now = Date.now() / 1000 - (upS.delay || 0), k = upNow();
+      if (k !== upIdx) { upLast = Date.now(); upPlayIdx(k, now - upS.plays[k].t); return; }        // wrong song for this moment: jump to what is on air
+      const expected = now - upS.plays[upIdx].t, cur = yt.getCurrentTime(), dur = yt.getDuration();
+      if (dur && expected < dur - 5 && Math.abs(cur - expected) > 20) { upLast = Date.now(); yt.seekTo(expected, true); }   // paused or stalled: catch up to live
     } catch (e) {}
-  }, 8000);
+  }, 6000);
   function ytStop() { if (!ytOn) return; ytOn = false; ytPlaying = false; try { yt && yt.stopVideo(); } catch (e) {} }
 
   const isUP = s => s && typeof s[1] === 'string' && s[1].startsWith('web:');
