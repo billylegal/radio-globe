@@ -558,6 +558,17 @@
   const applyVol = () => { const v = +$('vol').value; audio.volume = v; try { if (yt && yt.setVolume) yt.setVolume(Math.round(v * 100)); } catch (e) {} };
   $('vol').oninput = applyVol; $('vol').onchange = applyVol;
   function setPlayerLogo(s) { $('plogo').innerHTML = logo(s, 'pl'); $('favBtn').disabled = false; paintFavs(); }
+
+  // phone lock screen / notification player: station name, location, play & pause (the stream itself is a normal audio element, so phones keep it going in the background)
+  if ('mediaSession' in navigator && typeof MediaMetadata !== 'undefined') {
+    const MS = navigator.mediaSession;
+    const msUpdate = () => { const s = current; if (!s) return; try { MS.metadata = new MediaMetadata({ title: s[0], artist: [s[15], s[12]].filter(Boolean).join(' · ') || 'Radio Globe', album: 'A View From Space · Radio Globe', artwork: [{ src: 'assets/icon/radio-globe-512.png', sizes: '512x512', type: 'image/png' }] }); MS.playbackState = audio.paused ? 'paused' : 'playing'; } catch (e) {} };
+    ['play', 'playing', 'pause', 'loadedmetadata'].forEach(ev => audio.addEventListener(ev, msUpdate));
+    try { MS.setActionHandler('play', () => { audio.play().catch(() => {}); }); } catch (e) {}
+    try { MS.setActionHandler('pause', () => { audio.pause(); }); } catch (e) {}
+    try { MS.setActionHandler('stop', () => { audio.pause(); }); } catch (e) {}
+    try { MS.setActionHandler('nexttrack', null); MS.setActionHandler('previoustrack', null); } catch (e) {}
+  }
   function play(s, fly) {
     if (isBL(s)) { audio.pause(); if (hls) { hls.destroy(); hls = null; } current = s; detail(s); $('shareBtn').disabled = false; setPlayerLogo(s); $('pplay').disabled = false; ytStart('bl'); pulseT = performance.now(); if (fly) flyTo(s); return; }
     ytStop();
