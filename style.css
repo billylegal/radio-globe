@@ -235,7 +235,8 @@ button,input,select,label{touch-action:manipulation}
 #bounceHead{position:fixed;inset:0;pointer-events:none;z-index:4;overflow:hidden;display:none}
 #bounceHead.on{display:block}
 #bounceHead .bhx{position:absolute;left:0;top:0;animation:bhx 19s linear infinite alternate}
-#bounceHead .bhy{display:block;width:62px;height:auto;animation:bhy 13s linear infinite alternate;filter:drop-shadow(0 4px 10px rgba(0,0,0,.55))}
+#bounceHead .bhy{display:block;width:62px;height:auto;pointer-events:auto;cursor:pointer;animation:bhy 13s linear infinite alternate;filter:drop-shadow(0 4px 10px rgba(0,0,0,.55))}
+#bounceHead .bhy img{display:block;width:100%;height:auto}
 @keyframes bhx{from{transform:translateX(0)}to{transform:translateX(calc(100vw - 62px))}}
 @keyframes bhy{from{transform:translateY(0)}to{transform:translateY(calc(100vh - 88px))}}
 @media (prefers-reduced-motion:reduce){#bounceHead .bhx,#bounceHead .bhy{animation:none}}

@@ -486,20 +486,25 @@
   }
   // 1UP Radio: follows the live schedule published at 1upradio.com
   const upNow = () => { let k = 0; const src = Date.now() / 1000 - (upS.delay || 0); for (let i = 0; i < upS.plays.length; i++) { if (upS.plays[i].t <= src) k = i; else break; } return k; };
-  let upTimer = null;
+  let upTimer = null, upCurAlt = 0, upCur = null; const upBad = {};
   function upClear() { if (upTimer) { clearTimeout(upTimer); upTimer = null; } }
-  function upPlayIdx(i, offset) {
+  // If YouTube will not play a song here, EVERY listener (this page and 1upradio.com) swaps in the same replacement for that slot, picked by a fixed rule, so they stay in step.
+  function upAltIdx(i, n) { const lo = Math.max(0, i - 900), hi = Math.max(lo + 1, i - 40), len = hi - lo; return lo + ((((i * 2654435761 + n * 40503 + 7) % len) + len) % len); }
+  function upSlotPlay(i, n) { return n === 0 ? upS.plays[i] : upS.plays[upAltIdx(i, n)]; }
+  function upPlayIdx(i, offset, n) {
     upClear();
     const pl = upS.plays; if (!pl.length) return;
-    if (i >= pl.length) { i = Math.max(0, pl.length - 40 + ((Math.random() * 30) | 0)); offset = 0; }
-    upIdx = i; const p = pl[i], k = p.title.indexOf(' - ');
+    if (i >= pl.length) { i = Math.max(0, pl.length - 40 + ((Math.random() * 30) | 0)); offset = 0; n = 0; }
+    n = n || 0; let p = upSlotPlay(i, n);
+    while (n < 8 && upBad[p.id]) { n++; p = upSlotPlay(i, n); }
+    upIdx = i; upCurAlt = n; upCur = p; const k = p.title.indexOf(' - ');
     $('pname').textContent = '1UP Radio - Keep the Volume Up';
     $('pmeta').textContent = (k > 0 ? p.title.slice(k + 3) + ' · ' + p.title.slice(0, k) : p.title) + ' · live schedule';
     offset = Math.max(0, Math.floor(offset || 0));
-    if (offset > p.dur - 5 && i + 1 < pl.length) { upNext(); return; }     // song is basically over: wait for the next slot
+    if (offset > p.dur - 5 && i + 1 < pl.length) { upNext(); return; }       // song is basically over: wait for the next slot
     yt.loadVideoById({ videoId: p.id, startSeconds: offset });
   }
-  // the next song starts exactly when the schedule says it begins (never early), so this stays in step with 1upradio.com
+  // after a song ends the next one starts exactly when the schedule says it begins (never early), so this stays in step with 1upradio.com
   function upNext() {
     const n = upIdx + 1;
     if (n >= upS.plays.length) { upPlayIdx(n, 0); return; }
@@ -520,7 +525,7 @@
     else { await ytSongList(); ytQ = shuffleArr(ytSongs); ytPos = -1; first = () => ytPlayPos(0); }
     const init = () => { if (yt) { first(); return; } yt = new YT.Player('ytplayer', { width: 200, height: 200, playerVars: { playsinline: 1, rel: 0, modestbranding: 1, iv_load_policy: 3 }, events: { onReady: () => first(),
       onStateChange: e => { if (e.data === 1) { ytPlaying = true; ytErr = 0; $('pplay').textContent = '❚❚'; } else if (e.data === 2) { ytPlaying = false; $('pplay').textContent = '▶'; } else if (e.data === 0) ytNext(); },
-      onError: () => { if (++ytErr < 6) ytNext(); else $('pmeta').textContent = (ytMode === 'up' ? '1UP Radio' : 'Billy Legal Radio') + ' is unavailable right now'; } } }); };
+      onError: () => { if (ytMode === 'up' && upS && upS.plays[upIdx]) { if (upCur) upBad[upCur.id] = 1; if (++ytErr < 8) { upPlayIdx(upIdx, Date.now() / 1000 - (upS.delay || 0) - upS.plays[upIdx].t, upCurAlt + 1); return; } } else if (++ytErr < 6) { ytNext(); return; } else $('pmeta').textContent = (ytMode === 'up' ? '1UP Radio' : 'Billy Legal Radio') + ' is unavailable right now'; } } }); };
     if (window.YT && YT.Player) init(); else { window.onYouTubeIframeAPIReady = init; const sc = document.createElement('script'); sc.src = 'https://www.youtube.com/iframe_api'; document.head.appendChild(sc); }
   }
   // 1UP Radio: stay locked to the live schedule (same rule as 1upradio.com): refresh it, and jump back to live after a pause/stall
@@ -536,7 +541,7 @@
     if (!ytOn || ytMode !== 'up' || !ytPlaying || !upS || upIdx < 0 || !upS.plays[upIdx] || upTimer || Date.now() - upLast < 20000) return;
     try {
       const now = Date.now() / 1000 - (upS.delay || 0), k = upNow();
-      if (k !== upIdx) { upLast = Date.now(); upPlayIdx(k, now - upS.plays[k].t); return; }        // wrong song for this moment: jump to what is on air
+      if (k !== upIdx) { upLast = Date.now(); upPlayIdx(k, now - upS.plays[k].t); return; }          // wrong song for this moment: jump to what is on air
       const expected = now - upS.plays[upIdx].t, cur = yt.getCurrentTime(), dur = yt.getDuration();
       if (dur && expected < dur - 5 && Math.abs(cur - expected) > 20) { upLast = Date.now(); yt.seekTo(expected, true); }   // paused or stalled: catch up to live
     } catch (e) {}
@@ -545,17 +550,17 @@
 
   const isUP = s => s && typeof s[1] === 'string' && s[1].startsWith('web:');
 
-  // the BEATS head bounces around the screen while Billy Legal Radio is playing
+  // the BEATS head floats around the screen all the time; tap it to visit billylegal.com
   const bhead = document.createElement('div'); bhead.id = 'bounceHead'; bhead.setAttribute('aria-hidden', 'true');
-  bhead.innerHTML = '<div class="bhx"><img class="bhy" src="assets/head.png" alt="" width="62" height="87"></div>'; document.body.appendChild(bhead);
+  bhead.innerHTML = '<div class="bhx"><a class="bhy" href="https://billylegal.com" target="_blank" rel="noopener" title="Billy Legal" aria-label="Billy Legal"><img src="assets/head.png" alt="" width="62" height="87"></a></div>'; document.body.appendChild(bhead);
   const showHead = on => bhead.classList.toggle('on', !!on);
+  showHead(true);
   // ---------- audio ----------
   const audio = $('audio'); let hls = null, tries = 0, randomMode = false;
   audio.volume = 0.8;
   $('vol').oninput = e => audio.volume = e.target.value;
   function setPlayerLogo(s) { $('plogo').innerHTML = logo(s, 'pl'); $('favBtn').disabled = false; paintFavs(); }
   function play(s, fly) {
-    showHead(isBL(s));
     if (isBL(s)) { audio.pause(); if (hls) { hls.destroy(); hls = null; } current = s; detail(s); $('shareBtn').disabled = false; setPlayerLogo(s); $('pplay').disabled = false; ytStart('bl'); pulseT = performance.now(); if (fly) globe.pointOfView({ lat: s[2], lng: s[3], altitude: 0.35 }, 1400); return; }
     ytStop();
     if (isUP(s)) { audio.pause(); if (hls) { hls.destroy(); hls = null; } current = s; detail(s); $('shareBtn').disabled = false; $('pname').textContent = s[0]; $('pmeta').textContent = 'Tuning in…'; setPlayerLogo(s); $('pplay').disabled = false; ytStart('up'); pulseT = performance.now(); if (fly) globe.pointOfView({ lat: s[2], lng: s[3], altitude: 0.35 }, 1400); return; }
@@ -771,5 +776,5 @@
   buildGenres(); applyFilter();
   const sm = /^s=([^&]+)/.exec(h), altp = /[&?]alt=([\d.]+)/.exec(h);
   if (sm) { const s = S.find(x => x[13] === sm[1]); if (s) { openPanel([s], s[0], s[12] || ''); detail(s); setPlayerLogo(s); $('pname').textContent = s[0]; $('pmeta').textContent = 'Shared station · press ▶ to listen'; $('pplay').disabled = !s[1]; $('shareBtn').disabled = false; globe.pointOfView({ lat: s[2], lng: s[3], altitude: altp ? +altp[1] : 0.4 }, 0); ctl.autoRotate = false; autoRotate = false; $('pplay').onclick = () => { play(s); $('pplay').onclick = prevPlayClick; }; } }
-  window.__radioGlobe = { globe, get shown() { return shown; }, get cells() { return cells; }, project };
+  window.__radioGlobe = { replay() { upPlayIdx(upIdx, Date.now() / 1000 - (upS.delay || 0) - upS.plays[upIdx].t, 0); }, get upCur() { return upCur; }, get yt() { return yt; }, get ytState() { try { return yt && yt.getPlayerState(); } catch (e) { return 'err'; } }, get upIdx() { return upIdx; }, get bad() { return upBad; }, globe, get shown() { return shown; }, get cells() { return cells; }, project };
 })();
