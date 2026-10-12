@@ -82,7 +82,8 @@
     .onZoom(() => schedule());
   const ctl = globe.controls();
   ctl.autoRotate = true; ctl.autoRotateSpeed = 0.35; ctl.minDistance = 100.12; ctl.maxDistance = 520; ctl.zoomSpeed = 0.9; ctl.enableDamping = true;
-  globe.pointOfView({ lat: 30, lng: 10, altitude: 2.4 });
+  try { globe.renderer().setPixelRatio(Math.min(devicePixelRatio || 1, innerWidth <= 820 ? 1.5 : 2)); } catch (e) {}
+  globe.pointOfView({ lat: 30, lng: 10, altitude: innerWidth < 500 ? 4.4 : innerWidth < innerHeight ? 3.2 : 2.4 });
   addEventListener('resize', () => globe.width(innerWidth).height(innerHeight));
   let tmr, lastAlt = -1;
   function schedule() { clearTimeout(tmr); tmr = setTimeout(() => { const a = globe.pointOfView().altitude; if (Math.abs(a - lastAlt) / Math.max(a, .05) > 0.12) refreshPoints(); }, 140); }
@@ -446,6 +447,12 @@
     else if (b && b.dataset.a === 'copystream') copy(current[1], 'Stream URL');
     else if (c && c.dataset.g !== undefined) { filter = { kind: 'genre', id: +c.dataset.g }; applyFilter(); }
   });
+  // phone layout: the filter panel is a slide-in drawer
+  const sideOpen = on => { $('side').classList.toggle('open', on); $('sideScrim').classList.toggle('on', on); };
+  $('menuBtn').onclick = () => sideOpen(!$('side').classList.contains('open'));
+  $('sideScrim').onclick = () => sideOpen(false);
+  $('genres').addEventListener('click', e => { if (innerWidth <= 820 && e.target.closest('[data-g]')) setTimeout(() => sideOpen(false), 150); });
+  $('bands').addEventListener('click', e => { if (innerWidth <= 820 && e.target.closest('.chip') && !e.target.closest('[data-b="fav"]')) setTimeout(() => sideOpen(false), 150); });
   $('shareBtn').onclick = () => share(current);
   $('favBtn').onclick = () => { if (current) { toggleFav(current); detail(current); } };
 
@@ -555,7 +562,27 @@
   $('random').onclick = () => { randomMode = true; tries = 0; randomStation(); };
   $('rotate').onclick = () => { autoRotate = !autoRotate; ctl.autoRotate = autoRotate; $('rotate').style.opacity = autoRotate ? 1 : .5; };
   $('spaceBtn').onclick = () => setSpaced(!spaced, true);
-  try { if (localStorage.getItem('rg-spaced') === '1') setSpaced(true); } catch (e) {}
+  // ---------- always open in Spaced out view with 1UP Radio playing ----------
+  setSpaced(true);
+  {
+    const up = S.find(isUP);
+    const tap = document.createElement('div'); tap.id = 'tapStart'; tap.textContent = '▶ Tap anywhere to start 1UP Radio'; tap.style.display = 'none'; document.body.appendChild(tap);
+    let muted = false;
+    const unlock = () => {
+      try { if (yt && yt.unMute) { yt.unMute(); yt.setVolume(100); if (!ytPlaying) yt.playVideo(); } else if (up && !ytOn) play(up, false); } catch (e) {}
+      muted = false;
+    };
+    ['pointerdown', 'keydown', 'touchstart'].forEach(ev => addEventListener(ev, () => { if (tap.style.display !== 'none' || muted) unlock(); }, { passive: true }));
+    if (up) {
+      play(up, false);
+      setTimeout(() => {   // browsers block sound before the first tap: fall back to muted autoplay, then unmute on the first touch
+        if (ytPlaying || ytMode !== 'up') return;
+        try { if (yt && yt.mute) { yt.mute(); yt.playVideo(); muted = true; } } catch (e) {}
+        tap.style.display = 'block';
+      }, 3500);
+      setInterval(() => { if (tap.style.display !== 'none' && ytPlaying && !muted) tap.style.display = 'none'; }, 700);
+    }
+  }
   addEventListener('keydown', e => {
     if (/INPUT/.test(document.activeElement.tagName)) return;
     if (e.key === 'n' || e.key === 'N') $('random').click();
