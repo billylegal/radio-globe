@@ -530,12 +530,17 @@
 
   const isUP = s => s && typeof s[1] === 'string' && s[1].startsWith('web:');
 
+  // the BEATS head bounces around the screen while Billy Legal Radio is playing
+  const bhead = document.createElement('div'); bhead.id = 'bounceHead'; bhead.setAttribute('aria-hidden', 'true');
+  bhead.innerHTML = '<div class="bhx"><img class="bhy" src="assets/head.png" alt="" width="62" height="87"></div>'; document.body.appendChild(bhead);
+  const showHead = on => bhead.classList.toggle('on', !!on);
   // ---------- audio ----------
   const audio = $('audio'); let hls = null, tries = 0, randomMode = false;
   audio.volume = 0.8;
   $('vol').oninput = e => audio.volume = e.target.value;
   function setPlayerLogo(s) { $('plogo').innerHTML = logo(s, 'pl'); $('favBtn').disabled = false; paintFavs(); }
   function play(s, fly) {
+    showHead(isBL(s));
     if (isBL(s)) { audio.pause(); if (hls) { hls.destroy(); hls = null; } current = s; detail(s); $('shareBtn').disabled = false; setPlayerLogo(s); $('pplay').disabled = false; ytStart('bl'); pulseT = performance.now(); if (fly) globe.pointOfView({ lat: s[2], lng: s[3], altitude: 0.35 }, 1400); return; }
     ytStop();
     if (isUP(s)) { audio.pause(); if (hls) { hls.destroy(); hls = null; } current = s; detail(s); $('shareBtn').disabled = false; $('pname').textContent = s[0]; $('pmeta').textContent = 'Tuning in…'; setPlayerLogo(s); $('pplay').disabled = false; ytStart('up'); pulseT = performance.now(); if (fly) globe.pointOfView({ lat: s[2], lng: s[3], altitude: 0.35 }, 1400); return; }
