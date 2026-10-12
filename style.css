@@ -240,3 +240,12 @@ button,input,select,label{touch-action:manipulation}
 @keyframes bhx{from{transform:translateX(0)}to{transform:translateX(calc(100vw - 62px))}}
 @keyframes bhy{from{transform:translateY(0)}to{transform:translateY(calc(100vh - 88px))}}
 @media (prefers-reduced-motion:reduce){#bounceHead .bhx,#bounceHead .bhy{animation:none}}
+
+/* floating Omarchy Store shuttle */
+.sh{position:fixed;inset:0;pointer-events:none;z-index:4;overflow:hidden}
+.shx{position:absolute;left:0;top:0;animation:shx 29s linear infinite alternate;animation-delay:-11s}
+.shy{display:block;width:96px;pointer-events:auto;cursor:pointer;animation:shy 21s linear infinite alternate;animation-delay:-7s;filter:drop-shadow(0 4px 10px rgba(0,0,0,.55))}
+.shy img{display:block;width:100%;height:auto}
+@keyframes shx{from{transform:translateX(0)}to{transform:translateX(calc(100vw - 96px))}}
+@keyframes shy{from{transform:translateY(0)}to{transform:translateY(calc(100vh - 70px))}}
+@media(prefers-reduced-motion:reduce){.shx,.shy{animation:none}}
