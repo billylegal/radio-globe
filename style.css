@@ -108,7 +108,7 @@ input[type=search]:focus{border-color:var(--acc)}
 #side,#topbar,#panel,#player,#favdrawer,#stat{z-index:6}.tip{position:fixed;z-index:30;pointer-events:none}
 
 
-#bullseye{position:fixed;left:0;top:0;width:112px;height:112px;margin:0;transform:translate(calc(50vw - 56px),calc(50vh - 56px));transition:transform .07s linear;will-change:transform;z-index:2;pointer-events:none;filter:drop-shadow(0 0 1.5px rgba(0,0,0,.9)) drop-shadow(0 0 4px rgba(0,0,0,.45));opacity:.92}
+#bullseye{position:fixed;left:0;top:0;width:112px;height:112px;margin:0;transform:translate(calc(50vw - 56px),calc(50vh - 56px));will-change:transform;z-index:2;pointer-events:none;filter:drop-shadow(0 0 1.5px rgba(0,0,0,.9)) drop-shadow(0 0 4px rgba(0,0,0,.45));opacity:.92}
 @keyframes spin{to{transform:rotate(360deg)}}
 
 #ytbox{position:fixed;left:-10000px;top:0;width:200px;height:200px;overflow:hidden;pointer-events:none}
@@ -228,3 +228,6 @@ button,input,select,label{touch-action:manipulation}
   #favdrawer{padding:14px}
 }
 @media(max-width:380px){#topbar button{padding:0 11px;font-size:14px}}
+
+.powered{margin:-6px 0 2px 2px;font-size:12px;color:var(--dim);letter-spacing:.3px}
+.powered a{color:var(--acc);text-decoration:none}.powered a:hover{text-decoration:underline}

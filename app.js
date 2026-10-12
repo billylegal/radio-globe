@@ -146,7 +146,12 @@
   }
   $('themesw').innerHTML = THEMES.map(t => '<button data-t="' + t.id + '"><i style="background:' + t.c + '"></i>' + t.name + '</button>').join('');
   $('themesw').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setTheme(b.dataset.t, true); });
-  $('themeBtn').onclick = e => { e.stopPropagation(); $('themepop').classList.toggle('hidden'); };
+  // phone/touch: every tap on Theme switches to the next of the 8 colors; desktop keeps the swatch picker
+  $('themeBtn').onclick = e => {
+    e.stopPropagation();
+    if (matchMedia('(max-width:820px), (pointer:coarse)').matches) { const i = THEMES.findIndex(t => t.c === RED); setTheme(THEMES[(i + 1) % THEMES.length].id, true); }
+    else $('themepop').classList.toggle('hidden');
+  };
   document.addEventListener('click', e => { if (!e.target.closest('#themepop') && !e.target.closest('#themeBtn')) $('themepop').classList.add('hidden'); });
   try { setTheme(localStorage.getItem('rg-theme') || 'nvg'); } catch (e) { setTheme('nvg'); }
   function project(lat, lng, alt) {
@@ -244,32 +249,29 @@
     updateReticle();
   }
   requestAnimationFrame(frame);
-  function pickAt(x, y) {
-    let best = null, bd = 1e9;
-    for (const d of scr) { const dd = Math.hypot(d.x - x, d.y - y); if (dd < Math.max(d.r + 4, 8) && dd < bd) { bd = dd; best = d.c; } }
-    return best;
-  }
+  // the bullseye lock-on, the hover highlight and the click all use the same rule, so what it locks onto is what you get
+  function pickAt(x, y, touch) { const d = pickNear(x, y, touch ? 34 : 20); return d ? d.c : null; }
   const gEl = $('globe'), tip = document.createElement('div'); tip.id = 'dtip'; tip.className = 'tip hidden'; document.body.appendChild(tip);
   gEl.addEventListener('pointermove', e => {
     if (e.buttons) { tip.classList.add('hidden'); return; }
-    const c = pickAt(e.clientX, e.clientY);
+    const c = pickAt(e.clientX, e.clientY, e.pointerType === 'touch');
     if (c !== hover) { hover = c; dirty = true; gEl.style.cursor = c ? 'pointer' : ''; }
     if (c) { tip.innerHTML = c.live ? '<b>🔴 LIVE · ' + esc(c.live.title) + '</b><span>' + esc(c.live.channel + (c.live.place ? ' · ' + c.live.place : '')) + '</span>' : c.ev ? '<b>' + esc(c.ev.name) + '</b><span>' + esc([c.ev.venue, c.ev.city].filter(Boolean).join(' · ')) + '</span>' : '<b>' + (c.n > 1 ? c.n + ' stations' : esc(c.list[0][0]) + (c.list[0][15] ? ' · ' + esc(c.list[0][15]) : '')) + '</b><span>' + (c.n > 1 ? esc(c.list.slice(0, 3).map(s => s[0]).join(' · ')) + (c.n > 3 ? ' …' : '') : esc(c.list[0][12] || '')) + '</span>'; tip.style.left = Math.min(innerWidth - 300, e.clientX + 14) + 'px'; tip.style.top = (e.clientY + 14) + 'px'; tip.classList.remove('hidden'); } else tip.classList.add('hidden');
   });
   gEl.addEventListener('pointerleave', () => { tip.classList.add('hidden'); hover = null; dirty = true; });
   let down = null;
-  gEl.addEventListener('pointerdown', e => { down = [e.clientX, e.clientY]; });
-  gEl.addEventListener('pointerup', e => { if (down && Math.hypot(e.clientX - down[0], e.clientY - down[1]) < 5) { const c = pickAt(e.clientX, e.clientY); if (c) onCell(c); } down = null; });
+  gEl.addEventListener('pointerdown', e => { down = [e.clientX, e.clientY]; ptr = [e.clientX, e.clientY]; updateReticle(e.pointerType === 'touch' ? 34 : 20); });
+  gEl.addEventListener('pointerup', e => { if (down && Math.hypot(e.clientX - down[0], e.clientY - down[1]) < 5) { const c = pickAt(e.clientX, e.clientY, e.pointerType === 'touch'); if (c) onCell(c); } down = null; });
   ctl.addEventListener('change', () => { dirty = true; });
   // bullseye: a free scope that follows your mouse and locks onto a dot when you are close; click to choose
   let ptr = null, lockedTo = null;
   function pickNear(x, y, rad) { let best = null, bd = rad; for (const d of scr) { const dd = Math.hypot(d.x - x, d.y - y); if (dd < bd) { bd = dd; best = d; } } return best; }
-  function updateReticle() {
+  function updateReticle(rad) {
     if (!ptr) return;
-    const d = pickNear(ptr[0], ptr[1], 18), x = d ? d.x : ptr[0], y = d ? d.y : ptr[1];
+    const d = pickNear(ptr[0], ptr[1], rad || 20), x = d ? d.x : ptr[0], y = d ? d.y : ptr[1];
     bz.style.transform = 'translate(' + (x - 56).toFixed(1) + 'px,' + (y - 56).toFixed(1) + 'px)'; bz.classList.toggle('lock', !!d);
   }
-  gEl.addEventListener('pointermove', e => { ptr = [e.clientX, e.clientY]; if (!e.buttons) updateReticle(); });
+  gEl.addEventListener('pointermove', e => { ptr = [e.clientX, e.clientY]; if (!e.buttons) updateReticle(e.pointerType === 'touch' ? 34 : 20); });
   ctl.addEventListener('change', () => { draw(); });
 
   // ---------- Live now: DJ sets streaming right now + tonight's events ----------
