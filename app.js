@@ -98,11 +98,11 @@
   // stop auto-rotation once the user grabs the globe
   ctl.addEventListener('start', () => { ctl.autoRotate = false; autoRotate = false; $('rotate').style.opacity = .5; });
 
-  // ---------- "Spaced out" view: no globe, only the station dots ----------
+  // ---------- "Ghost" view: no globe, only the station dots ----------
   const TILE_URL = (x, y, l) => 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/' + l + '/' + y + '/' + x;
   let spaced = false;
   function setSpaced(on, save) {
-    spaced = on; $('spaceBtn').classList.toggle('on', on); $('spaceBtn').style.opacity = 1; $('spaceBtn').textContent = on ? '🌍 Earth' : 'Spaced out'; $('spaceBtn').title = on ? 'Back to the Earth view' : 'Spaced out: hide the globe, show only the station dots';
+    spaced = on; $('spaceBtn').classList.toggle('on', on); $('spaceBtn').style.opacity = 1; $('spaceBtn').textContent = on ? '🌍 Earth' : 'Ghost'; $('spaceBtn').title = on ? 'Back to the Earth view' : 'Ghost: hide the globe, show only the station dots';
     if (save) { try { localStorage.setItem('rg-spaced', on ? '1' : '0'); } catch (e) {} }
     if (on) {
       try { globe.globeMaterial().visible = false; } catch (e) {}
@@ -579,7 +579,7 @@
   $('random').onclick = () => { randomMode = true; tries = 0; randomStation(); };
   $('rotate').onclick = () => { autoRotate = !autoRotate; ctl.autoRotate = autoRotate; $('rotate').style.opacity = autoRotate ? 1 : .5; };
   $('spaceBtn').onclick = () => setSpaced(!spaced, true);
-  // ---------- always open in Spaced out view with 1UP Radio playing ----------
+  // ---------- always open in Ghost view with 1UP Radio playing ----------
   setSpaced(true);
   {
     const up = S.find(isUP);
