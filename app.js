@@ -119,7 +119,7 @@
   function onCell(c) {
     if (c.live) { liveWatch(c.live); return; } if (c.ev) { openLive('events'); return; }
     const alt = globe.pointOfView().altitude;
-    if (c.n === 1) { openPanel(c.list, c.list[0][0], 'near ' + (c.list[0][12] || '')); if (c.list[0][1]) play(c.list[0]); return; }
+    if (c.n === 1) { openPanel(c.list, c.list[0][0], 'near ' + (c.list[0][12] || '')); if (c.list[0][1]) play(c.list[0], true); else flyTo(c.list[0]); return; }
     if (alt > 0.45 && c.n > 25) { globe.pointOfView({ lat: c.lat, lng: c.lng, altitude: Math.max(0.12, alt * 0.45) }, 900); return; }
     openPanel(c.list, c.n + ' stations here', c.list[0][12] || ''); globe.pointOfView({ lat: c.lat, lng: c.lng, altitude: Math.min(alt, 0.5) }, 700);
   }
@@ -418,7 +418,7 @@
     openPanel(list, name, list.length.toLocaleString() + ' stations · scroll for more'); $('pdetail').classList.add('hidden');
   }
   function starClick(e, list) { const b = e.target.closest('.star'); if (!b) return false; e.stopPropagation(); const s = S.find(x => x[13] === b.dataset.u); if (s) toggleFav(s); return true; }
-  $('plist').addEventListener('click', e => { if (liveOpen) return; if (starClick(e)) return; const r = e.target.closest('.row'); if (r && panelList[+r.dataset.i]) play(panelList[+r.dataset.i]); });
+  $('plist').addEventListener('click', e => { if (liveOpen) return; if (starClick(e)) return; const r = e.target.closest('.row'); if (r && panelList[+r.dataset.i]) play(panelList[+r.dataset.i], true); });
   $('pclose').onclick = () => $('panel').classList.add('hidden');
 
   // ---------- station details + share ----------
@@ -431,6 +431,7 @@
     try { await navigator.clipboard.writeText(text + '\n' + url); toast('Link copied to clipboard'); } catch (e) { prompt('Copy this link:', url); }
   }
   async function copy(txt, what) { try { await navigator.clipboard.writeText(txt); toast(what + ' copied'); } catch (e) { prompt('Copy:', txt); } }
+  function flyTo(s) { if (s[2] == null) return; ctl.autoRotate = false; autoRotate = false; globe.pointOfView({ lat: s[2], lng: s[3], altitude: 0.1 }, 1600); }
   function zoomTo(s) { ctl.autoRotate = false; autoRotate = false; globe.pointOfView({ lat: s[2], lng: s[3], altitude: 0.004 }, 2600); }
   function detail(s) {
     current = s;
@@ -558,14 +559,14 @@
   $('vol').oninput = applyVol; $('vol').onchange = applyVol;
   function setPlayerLogo(s) { $('plogo').innerHTML = logo(s, 'pl'); $('favBtn').disabled = false; paintFavs(); }
   function play(s, fly) {
-    if (isBL(s)) { audio.pause(); if (hls) { hls.destroy(); hls = null; } current = s; detail(s); $('shareBtn').disabled = false; setPlayerLogo(s); $('pplay').disabled = false; ytStart('bl'); pulseT = performance.now(); if (fly) globe.pointOfView({ lat: s[2], lng: s[3], altitude: 0.35 }, 1400); return; }
+    if (isBL(s)) { audio.pause(); if (hls) { hls.destroy(); hls = null; } current = s; detail(s); $('shareBtn').disabled = false; setPlayerLogo(s); $('pplay').disabled = false; ytStart('bl'); pulseT = performance.now(); if (fly) flyTo(s); return; }
     ytStop();
-    if (isUP(s)) { audio.pause(); if (hls) { hls.destroy(); hls = null; } current = s; detail(s); $('shareBtn').disabled = false; $('pname').textContent = s[0]; $('pmeta').textContent = 'Tuning in…'; setPlayerLogo(s); $('pplay').disabled = false; ytStart('up'); pulseT = performance.now(); if (fly) globe.pointOfView({ lat: s[2], lng: s[3], altitude: 0.35 }, 1400); return; }
+    if (isUP(s)) { audio.pause(); if (hls) { hls.destroy(); hls = null; } current = s; detail(s); $('shareBtn').disabled = false; $('pname').textContent = s[0]; $('pmeta').textContent = 'Tuning in…'; setPlayerLogo(s); $('pplay').disabled = false; ytStart('up'); pulseT = performance.now(); if (fly) flyTo(s); return; }
     if (!s[1]) {
       current = s; detail(s); $('shareBtn').disabled = false; $('pname').textContent = s[0]; setPlayerLogo(s); $('pplay').disabled = true;
       $('pmeta').innerHTML = esc([s[15], s[12]].filter(Boolean).join(' · ')) + ' · no online stream known' + (s[10] ? ' · <a href="' + esc(s[10]) + '" target="_blank" rel="noopener" style="color:var(--acc)">website</a>' : '');
       audio.pause(); pulseT = performance.now();
-      if (fly) globe.pointOfView({ lat: s[2], lng: s[3], altitude: 0.35 }, 1400);
+      if (fly) flyTo(s);
       return;
     }
     current = s; tries = 0; detail(s); $('shareBtn').disabled = false;
@@ -579,7 +580,7 @@
     else audio.src = url;
     audio.play().catch(() => {});
     pulseT = performance.now();
-    if (fly) globe.pointOfView({ lat: s[2], lng: s[3], altitude: 0.35 }, 1400);
+    if (fly) flyTo(s);
     document.querySelectorAll('.row').forEach(r => r.classList.toggle('now', panelList[+r.dataset.i] && panelList[+r.dataset.i][13] === s[13]));
     fetch('https://de1.api.radio-browser.info/json/url/' + s[13], { mode: 'no-cors' }).catch(() => {});
   }
