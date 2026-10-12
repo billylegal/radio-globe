@@ -401,10 +401,25 @@
     return '<div class="row' + (current && current[13] === s[13] ? ' now' : '') + '" data-i="' + i + '">' + fav + '<div class="t"><div class="n">' + esc(s[0]) + '</div><div class="m">' + esc(meta.filter(Boolean).join(' · ')) + '</div></div><button class="star' + (favs.has(s[13]) ? ' on' : '') + '" data-u="' + esc(s[13]) + '" title="Favorite">' + (favs.has(s[13]) ? '★' : '☆') + '</button></div>';
   }
   let panelList = [];
+  // station lists render in chunks of 100 as you scroll, so even a 1,500-station genre opens instantly
+  let panelDone = 0;
+  function panelMore() {
+    if (panelDone >= panelList.length) return;
+    const end = Math.min(panelList.length, panelDone + 100);
+    $('plist').insertAdjacentHTML('beforeend', panelList.slice(panelDone, end).map((s, k) => rowHTML(s, panelDone + k)).join(''));
+    panelDone = end;
+  }
+  $('plist').addEventListener('scroll', () => { const p = $('plist'); if (!liveOpen && p.scrollTop + p.clientHeight > p.scrollHeight - 500) panelMore(); }, { passive: true });
   function openPanel(list, title, sub) {
-    liveOpen = false; panelList = list.slice(0, 300);
-    $('ptitle').textContent = title; $('psub').textContent = sub + (list.length > 300 ? ' · top 300 by votes' : '');
-    $('plist').innerHTML = panelList.map(rowHTML).join(''); $('panel').classList.remove('hidden');
+    liveOpen = false; panelList = list; panelDone = 0;
+    $('ptitle').textContent = title; $('psub').textContent = sub;
+    $('plist').innerHTML = ''; $('plist').scrollTop = 0; panelMore(); $('panel').classList.remove('hidden');
+    if (panelList.length > panelDone) setTimeout(() => { const p = $('plist'); while (p.scrollHeight <= p.clientHeight + 100 && panelDone < panelList.length) panelMore(); }, 0);
+  }
+  // every genre opens its full station list (playable stations first, then most-voted)
+  function showGenreList(name) {
+    const list = shown.slice().sort((x, y) => (y[1] ? 1 : 0) - (x[1] ? 1 : 0) || y[5] - x[5]);
+    openPanel(list, name, list.length.toLocaleString() + ' stations · scroll for more'); $('pdetail').classList.add('hidden');
   }
   function starClick(e, list) { const b = e.target.closest('.star'); if (!b) return false; e.stopPropagation(); const s = S.find(x => x[13] === b.dataset.u); if (s) toggleFav(s); return true; }
   $('plist').addEventListener('click', e => { if (liveOpen) return; if (starClick(e)) return; const r = e.target.closest('.row'); if (r && panelList[+r.dataset.i]) play(panelList[+r.dataset.i]); });
@@ -725,8 +740,8 @@
   buildGenres();
   $('genres').addEventListener('click', e => {
     if (e.target.closest('#allbtn')) { filter = { kind: 'all' }; return applyFilter(); }
-    const chip = e.target.closest('.chip'); if (chip) { filter = { kind: 'genre', id: +chip.dataset.g }; return applyFilter(); }
-    const fh = e.target.closest('.fh'); if (fh) { fh.parentElement.classList.toggle('open'); if (e.detail === 2) { filter = { kind: 'family', fam: fh.dataset.fam }; applyFilter(); } }
+    const chip = e.target.closest('.chip'); if (chip) { filter = { kind: 'genre', id: +chip.dataset.g }; applyFilter(); return showGenreList(G[filter.id].name); }
+    const fh = e.target.closest('.fh'); if (fh) { fh.parentElement.classList.toggle('open'); if (e.detail === 2) { filter = { kind: 'family', fam: fh.dataset.fam }; applyFilter(); showGenreList(fh.dataset.fam); } }
   });
   $('gsearch').addEventListener('input', e => buildGenres(e.target.value));
 
