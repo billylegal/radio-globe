@@ -146,12 +146,8 @@
   }
   $('themesw').innerHTML = THEMES.map(t => '<button data-t="' + t.id + '"><i style="background:' + t.c + '"></i>' + t.name + '</button>').join('');
   $('themesw').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setTheme(b.dataset.t, true); });
-  // phone/touch: every tap on Theme switches to the next of the 8 colors; desktop keeps the swatch picker
-  $('themeBtn').onclick = e => {
-    e.stopPropagation();
-    if (matchMedia('(max-width:820px), (pointer:coarse)').matches) { const i = THEMES.findIndex(t => t.c === RED); setTheme(THEMES[(i + 1) % THEMES.length].id, true); }
-    else $('themepop').classList.toggle('hidden');
-  };
+  // every tap on Theme switches to the next of the 8 colors (no popup), on every device
+  $('themeBtn').onclick = e => { e.stopPropagation(); const i = THEMES.findIndex(t => t.c === RED); setTheme(THEMES[(i + 1) % THEMES.length].id, true); };
   document.addEventListener('click', e => { if (!e.target.closest('#themepop') && !e.target.closest('#themeBtn')) $('themepop').classList.add('hidden'); });
   try { setTheme(localStorage.getItem('rg-theme') || 'nvg'); } catch (e) { setTheme('nvg'); }
   function project(lat, lng, alt) {
@@ -523,8 +519,8 @@
     let first;
     if (ytMode === 'up') { try { const [k, off] = await upStart(); first = () => upPlayIdx(k, off); } catch (e) { $('pmeta').textContent = '1UP Radio schedule unavailable right now'; ytOn = false; return; } }
     else { await ytSongList(); ytQ = shuffleArr(ytSongs); ytPos = -1; first = () => ytPlayPos(0); }
-    const init = () => { if (yt) { first(); return; } yt = new YT.Player('ytplayer', { width: 200, height: 200, playerVars: { playsinline: 1, rel: 0, modestbranding: 1, iv_load_policy: 3 }, events: { onReady: () => first(),
-      onStateChange: e => { if (e.data === 1) { ytPlaying = true; ytErr = 0; $('pplay').textContent = '❚❚'; } else if (e.data === 2) { ytPlaying = false; $('pplay').textContent = '▶'; } else if (e.data === 0) ytNext(); },
+    const init = () => { if (yt) { first(); return; } yt = new YT.Player('ytplayer', { width: 200, height: 200, playerVars: { playsinline: 1, rel: 0, modestbranding: 1, iv_load_policy: 3 }, events: { onReady: () => { try { yt.setVolume(Math.round(+$('vol').value * 100)); } catch (e) {} first(); },
+      onStateChange: e => { if (e.data === 1) { ytPlaying = true; ytErr = 0; try { if (!yt.isMuted()) yt.setVolume(Math.round(+$('vol').value * 100)); } catch (x) {} $('pplay').textContent = '❚❚'; } else if (e.data === 2) { ytPlaying = false; $('pplay').textContent = '▶'; } else if (e.data === 0) ytNext(); },
       onError: () => { if (ytMode === 'up' && upS && upS.plays[upIdx]) { if (upCur) upBad[upCur.id] = 1; if (++ytErr < 8) { upPlayIdx(upIdx, Date.now() / 1000 - (upS.delay || 0) - upS.plays[upIdx].t, upCurAlt + 1); return; } } else if (++ytErr < 6) { ytNext(); return; } else $('pmeta').textContent = (ytMode === 'up' ? '1UP Radio' : 'Billy Legal Radio') + ' is unavailable right now'; } } }); };
     if (window.YT && YT.Player) init(); else { window.onYouTubeIframeAPIReady = init; const sc = document.createElement('script'); sc.src = 'https://www.youtube.com/iframe_api'; document.head.appendChild(sc); }
   }
@@ -558,7 +554,8 @@
   // ---------- audio ----------
   const audio = $('audio'); let hls = null, tries = 0, randomMode = false;
   audio.volume = 0.8;
-  $('vol').oninput = e => audio.volume = e.target.value;
+  const applyVol = () => { const v = +$('vol').value; audio.volume = v; try { if (yt && yt.setVolume) yt.setVolume(Math.round(v * 100)); } catch (e) {} };
+  $('vol').oninput = applyVol; $('vol').onchange = applyVol;
   function setPlayerLogo(s) { $('plogo').innerHTML = logo(s, 'pl'); $('favBtn').disabled = false; paintFavs(); }
   function play(s, fly) {
     if (isBL(s)) { audio.pause(); if (hls) { hls.destroy(); hls = null; } current = s; detail(s); $('shareBtn').disabled = false; setPlayerLogo(s); $('pplay').disabled = false; ytStart('bl'); pulseT = performance.now(); if (fly) globe.pointOfView({ lat: s[2], lng: s[3], altitude: 0.35 }, 1400); return; }
@@ -611,7 +608,7 @@
     const tap = document.createElement('div'); tap.id = 'tapStart'; tap.textContent = '▶ Tap anywhere to start 1UP Radio'; tap.style.display = 'none'; document.body.appendChild(tap);
     let muted = false;
     const unlock = () => {
-      try { if (yt && yt.unMute) { yt.unMute(); yt.setVolume(100); if (!ytPlaying) yt.playVideo(); } else if (up && !ytOn) play(up, false); } catch (e) {}
+      try { if (yt && yt.unMute) { yt.unMute(); yt.setVolume(Math.round(+$('vol').value * 100)); if (!ytPlaying) yt.playVideo(); } else if (up && !ytOn) play(up, false); } catch (e) {}
       muted = false;
     };
     ['pointerdown', 'keydown', 'touchstart'].forEach(ev => addEventListener(ev, () => { if (tap.style.display !== 'none' || muted) unlock(); }, { passive: true }));
