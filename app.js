@@ -134,6 +134,10 @@
   const cx = cv.getContext('2d');
   function sizeCanvas() { const d = Math.min(2, devicePixelRatio || 1); cv.width = innerWidth * d; cv.height = innerHeight * d; cv.style.width = innerWidth + 'px'; cv.style.height = innerHeight + 'px'; cx.setTransform(d, 0, 0, d, 0, 0); dirty = true; }
   sizeCanvas(); addEventListener('resize', sizeCanvas);
+  // phones/tablets: the song info card must sit UNDER the search bar, never over the top buttons (CSS reads --ptop)
+  const setPtop = () => { const sw = $('searchwrap'); if (sw) document.documentElement.style.setProperty('--ptop', Math.ceil(sw.getBoundingClientRect().bottom + 8) + 'px'); const pl = $('player'); if (pl) document.documentElement.style.setProperty('--pbot', Math.ceil(innerHeight - pl.getBoundingClientRect().top + 8) + 'px'); };
+  try { new ResizeObserver(setPtop).observe($('player')); } catch (e) {}
+  setPtop(); addEventListener('resize', setPtop); addEventListener('orientationchange', () => setTimeout(setPtop, 250)); setTimeout(setPtop, 600);
   let RED = '#39ff14', REDRGB = '57,255,20';
   const THEMES = [
     { id: 'nvg', name: 'Night Vision', c: '#39ff14', ink: '#031200', glass: '8,16,8' }, { id: 'amber', name: 'Tactical Amber', c: '#ffb000', ink: '#1a0f00', glass: '20,14,6' },
@@ -291,7 +295,7 @@
     autoPick = centerPick();
     const h = autoPick ? autoPick.c : null;
     if (h !== hover) { hover = h; dirty = true; }
-    if (autoPick && autoPick.d <= SNAP_R() && camSpeed < 260) { tip.innerHTML = tipFor(autoPick.c); tip.style.left = Math.min(innerWidth - 300, innerWidth / 2 + 34) + 'px'; tip.style.top = (innerHeight / 2 + 34) + 'px'; tip.classList.remove('hidden'); }
+    if (autoPick && autoPick.d <= SNAP_R() && camSpeed < 260 && !(innerWidth <= 820 && !$('panel').classList.contains('hidden'))) { tip.innerHTML = tipFor(autoPick.c); tip.style.left = Math.min(innerWidth - 300, innerWidth / 2 + 34) + 'px'; tip.style.top = (innerHeight / 2 + 34) + 'px'; tip.classList.remove('hidden'); }
     else tip.classList.add('hidden');
     updateReticle();
   }

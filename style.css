@@ -381,3 +381,11 @@ button,input,select,label{touch-action:manipulation}
 #saveSong{display:grid!important;place-content:center;justify-items:center;gap:1px;padding:0;line-height:1}
 #saveSong .ni{font-size:15px!important;line-height:1}
 #saveSong .nt{font-size:6px;font-weight:800;letter-spacing:.02em;line-height:1;white-space:nowrap;opacity:.9}
+
+/* info card on phones/tablets: stays below the search bar so Genres / Spin / Earth / Songs / Favorites are never covered */
+@media(max-width:820px){
+  #panel,#panel.single{max-height:calc(100vh - var(--ptop,112px) - 158px - env(safe-area-inset-bottom))!important;max-height:calc(100dvh - var(--ptop,112px) - 158px - env(safe-area-inset-bottom))!important}
+}
+@media(max-width:820px){
+  #panel,#panel.single{bottom:var(--pbot,158px)!important;max-height:calc(100vh - var(--ptop,112px) - var(--pbot,158px))!important;max-height:calc(100dvh - var(--ptop,112px) - var(--pbot,158px))!important}
+}
