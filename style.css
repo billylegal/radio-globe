@@ -456,3 +456,10 @@ body.locked .djstk{pointer-events:none!important}
 /* menu: DJ Mixes chip + Kids/Stories categories at the bottom */
 .chip.dj{background:var(--acc);color:var(--acc-ink,#04121c);border-color:var(--acc);font-weight:800}.chip.dj small{opacity:.75;color:inherit}
 .fam.setrow .fh{cursor:pointer}.fam.setrow .fh .cnt{margin-left:auto;opacity:.6;font-size:11px}.fam.setrow .fh.on{color:var(--acc)}
+
+/* synced lyrics */
+#lyrics .lf{display:flex;align-items:center;justify-content:space-between;gap:8px;text-align:left}#lyH{flex:1;min-width:0}
+#lyrics .lyn{display:none;gap:6px}#lyrics.sync .lyn{display:flex}#lyrics .lyn button{background:rgba(255,255,255,.1);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:6px 9px;font:700 11px system-ui;cursor:pointer}
+#lyrics.sync #lyB{padding:30vh 18px;font-size:18px}
+#lyrics.sync .ll{padding:5px 0;opacity:.38;transition:opacity .25s,transform .25s,color .25s;cursor:pointer;line-height:1.35}
+#lyrics.sync .ll.on{opacity:1;color:var(--acc);transform:scale(1.04);font-weight:800}

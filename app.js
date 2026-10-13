@@ -416,46 +416,89 @@
   });
 
   // ---------- Lyrics satellite: floats above the Earth while a song with lyrics is playing; tap it for the words ----------
-  const lyr = { key: '', data: null, cache: new Map(), tok: 0 };
+  const lyr = { key: '', data: null, cache: new Map(), tok: 0, t0: null, adj: 0, lines: [], idx: -1, manual: 0 };
+  function lyrReset() { lyr.key = ''; lyr.data = null; lyr.t0 = null; lyr.adj = 0; lyr.tok++; }   // new station: the next title we see is a song already in progress
   const sat = document.createElement('div'); sat.id = 'sat'; sat.title = 'Lyrics'; sat.setAttribute('role', 'button'); sat.setAttribute('aria-label', 'Show lyrics');
   sat.innerHTML = '<svg viewBox="0 0 64 44" width="54" height="37" aria-hidden="true"><g stroke="#0b1020" stroke-width="1.2" stroke-linejoin="round"><rect x="2" y="13" width="19" height="14" rx="1.5" fill="#4fa3ff"/><rect x="43" y="13" width="19" height="14" rx="1.5" fill="#4fa3ff"/><path d="M2 20h19M43 20h19M8 13v14M14 13v14M49 13v14M55 13v14" stroke="#cfe6ff" stroke-width=".8" fill="none"/><rect x="21" y="16" width="22" height="8" fill="#9aa7b8"/><rect x="25" y="9" width="14" height="22" rx="3" fill="#e8eef7"/><circle cx="32" cy="20" r="4" fill="var(--acc,#39ff14)"/></g><path d="M32 9V3" stroke="#e8eef7" stroke-width="1.5"/><circle cx="32" cy="2.5" r="2" fill="var(--acc,#39ff14)"/><path d="M26 40q6-5 12 0" stroke="var(--acc,#39ff14)" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg><span>LYRICS</span>';
   document.body.appendChild(sat);
   const lyrBox = document.createElement('div'); lyrBox.id = 'lyrics'; lyrBox.className = 'hidden';
-  lyrBox.innerHTML = '<div class="lh"><div><div id="lyT"></div><div id="lyA"></div></div><button id="lyX" aria-label="Close lyrics">✕</button></div><div id="lyB"></div><div class="lf">Lyrics from LRCLIB · for personal listening</div>';
+  lyrBox.innerHTML = '<div class="lh"><div><div id="lyT"></div><div id="lyA"></div></div><button id="lyX" aria-label="Close lyrics">✕</button></div><div id="lyB"></div><div class="lf"><span id="lyH"></span><span class="lyn"><button id="lyM" title="Lyrics too early? Nudge later">−0.5s</button><button id="lyP" title="Lyrics too late? Nudge earlier">+0.5s</button></span></div>';
   document.body.appendChild(lyrBox);
   function parseSong(t) {
     const s = String(t || '').replace(/\s*[\(\[][^)\]]*(remaster|version|edit|mix|live|feat|ft\.?|official|video|radio|explicit|lyrics?)[^)\]]*[\)\]]/ig, '').replace(/\s+/g, ' ').trim();
     const m = s.split(/\s[-–—]\s/); return m.length >= 2 ? { artist: m[0].trim(), track: m.slice(1).join(' - ').trim() } : { artist: '', track: s };
+  }
+  function parseLRC(s) {   // "[01:23.45] words" -> [{t: seconds, l: 'words'}]
+    if (!s) return null; const out = [];
+    for (const row of s.split('\n')) { const m = /^\s*((?:\[\d+:\d+(?:\.\d+)?\]\s*)+)(.*)$/.exec(row); if (!m) continue; for (const ts of m[1].match(/\[(\d+):(\d+(?:\.\d+)?)\]/g)) { const mm = /\[(\d+):(\d+(?:\.\d+)?)\]/.exec(ts); out.push({ t: +mm[1] * 60 + +mm[2], l: m[2].trim() }); } }
+    out.sort((x, y) => x.t - y.t); return out.length > 4 ? out : null;
   }
   async function fetchLyrics(t) {
     const { artist, track } = parseSong(t); if (!track || track.length < 2) return null;
     const J = async u => { const r = await fetch(u); return r.ok ? r.json() : null; }, enc = encodeURIComponent;
     const good = d => d && (d.plainLyrics || '').trim().length > 40 && !d.instrumental;
     try {
-      if (artist) { const d = await J('https://lrclib.net/api/get?artist_name=' + enc(artist) + '&track_name=' + enc(track)); if (good(d)) return { t: d.trackName, a: d.artistName, text: d.plainLyrics.trim() }; }
+      const pack = d => ({ t: d.trackName, a: d.artistName, text: d.plainLyrics.trim(), sync: parseLRC(d.syncedLyrics), dur: d.duration || 0 });
+      if (artist) { const d = await J('https://lrclib.net/api/get?artist_name=' + enc(artist) + '&track_name=' + enc(track)); if (good(d)) return pack(d); }
       const res = await J('https://lrclib.net/api/search?q=' + enc((artist + ' ' + track).trim())) || [];
       const ft = fold(track), fa = fold(artist);
       const hit = res.find(d => good(d) && (fold(d.trackName).includes(ft) || ft.includes(fold(d.trackName))) && (!fa || fold(d.artistName).includes(fa.split(' ')[0]) || fa.includes(fold(d.artistName).split(' ')[0])));
-      return hit ? { t: hit.trackName, a: hit.artistName, text: hit.plainLyrics.trim() } : null;
+      return hit ? pack(hit) : null;
     } catch (e) { return null; }
   }
   async function lyricsFor(title) {
     title = (title || '').trim(); if (title === lyr.key) return;
-    lyr.key = title; lyr.data = null; const my = ++lyr.tok; lyrBox.classList.add('hidden'); if (!title) return;
-    if (lyr.cache.has(title)) { lyr.data = lyr.cache.get(title); return; }
+    const joined = !lyr.key;   // first title after tuning in = joined mid-song (position unknown); a later change = a song just started
+    lyr.key = title; lyr.data = null; lyr.t0 = joined ? null : performance.now(); lyr.adj = joined ? 0 : lyr.adj; lyr.idx = -1; const my = ++lyr.tok; lyr.looking = !!title; if (!title) { lyrBox.classList.add('hidden'); return; }
+    if (lyr.cache.has(title)) { lyr.data = lyr.cache.get(title); lyr.looking = false; return; }
     const d = await fetchLyrics(title); lyr.cache.set(title, d); if (lyr.cache.size > 80) lyr.cache.delete(lyr.cache.keys().next().value);
-    if (my === lyr.tok) lyr.data = d;
+    if (my === lyr.tok) { lyr.data = d; lyr.looking = false; }
+  }
+  function lyrPos() {   // seconds into the song, or null if we cannot tell yet
+    if (ytOn && yt && yt.getCurrentTime) { try { return yt.getCurrentTime() + lyr.adj; } catch (e) {} }
+    return lyr.t0 == null ? null : (performance.now() - lyr.t0) / 1000 + lyr.adj;
+  }
+  function paintLyrics() {
+    const d = lyr.data; $('lyT').textContent = d.t; $('lyA').textContent = d.a; lyr.idx = -1;
+    if (d.sync) { $('lyB').innerHTML = d.sync.map((r, i) => '<div class="ll" data-i="' + i + '">' + (r.l ? esc(r.l) : '♪') + '</div>').join(''); lyrBox.classList.add('sync'); }
+    else { $('lyB').textContent = d.text; lyrBox.classList.remove('sync'); }
+    $('lyB').scrollTop = 0;
   }
   sat.addEventListener('click', () => {
-    if (!lyr.data) return; $('lyT').textContent = lyr.data.t; $('lyA').textContent = lyr.data.a; $('lyB').textContent = lyr.data.text; $('lyB').scrollTop = 0; lyrBox.classList.toggle('hidden');
+    if (!lyr.data) return; if (lyrBox.classList.contains('hidden')) { paintLyrics(); lyrBox.classList.remove('hidden'); npPoll(); } else lyrBox.classList.add('hidden');
   });
+  $('lyB').addEventListener('click', e => {   // tap the line you are hearing -> lock the timing to it
+    const ln = e.target.closest('.ll'); if (!ln || !lyr.data || !lyr.data.sync) return; const t = lyr.data.sync[+ln.dataset.i].t;
+    if (ytOn && yt && yt.getCurrentTime) { try { lyr.adj = t - yt.getCurrentTime(); } catch (err) {} } else { lyr.t0 = performance.now() - t * 1000; lyr.adj = 0; }
+    lyr.manual = performance.now();
+  });
+  $('lyM').addEventListener('click', () => { lyr.adj -= 0.5; }); $('lyP').addEventListener('click', () => { lyr.adj += 0.5; });
+  $('lyB').addEventListener('wheel', () => { lyr.manual = performance.now(); }, { passive: true }); $('lyB').addEventListener('touchmove', () => { lyr.manual = performance.now(); }, { passive: true });
+  setInterval(() => { if (!lyrBox.classList.contains('hidden') && !document.hidden) { try { npPoll(); } catch (e) {} } }, 5000);   // while the words are open, keep checking for the next song quickly
+  { const follow = () => {
+      requestAnimationFrame(follow);
+      if (lyrBox.classList.contains('hidden')) return;
+      if (!lyr.data) { $('lyT').textContent = lyr.looking ? 'Finding the lyrics…' : 'No lyrics for this song'; $('lyA').textContent = ''; $('lyH').textContent = ''; lyrBox.dataset.k = ''; return; }
+      if (lyrBox.dataset.k !== lyr.key) { lyrBox.dataset.k = lyr.key; paintLyrics(); }   // the song changed while the window was open
+      const d = lyr.data, hint = $('lyH');
+      if (!d.sync) { hint.textContent = 'No timing for this song · words only'; return; }
+      const p = lyrPos();
+      if (p == null) { hint.textContent = 'Tap the line you are hearing to sync'; return; }
+      hint.textContent = 'Following the song · tap a line to re-sync' + (lyr.adj ? ' · ' + (lyr.adj > 0 ? '+' : '') + lyr.adj.toFixed(1) + 's' : '');
+      let i = -1; for (let k = 0; k < d.sync.length; k++) { if (d.sync[k].t <= p + 0.15) i = k; else break; }
+      if (i !== lyr.idx) {
+        const rows = $('lyB').children; if (rows[lyr.idx]) rows[lyr.idx].classList.remove('on'); lyr.idx = i;
+        if (rows[i]) { rows[i].classList.add('on'); if (performance.now() - lyr.manual > 4000) { const b = $('lyB'), r = rows[i]; b.scrollTo({ top: r.offsetTop - b.clientHeight / 2 + r.offsetHeight / 2, behavior: 'smooth' }); } }
+      }
+    };
+    requestAnimationFrame(follow); }
   lyrBox.querySelector('#lyX').addEventListener('click', () => lyrBox.classList.add('hidden'));
   addEventListener('keydown', e => { if (e.key === 'Escape') lyrBox.classList.add('hidden'); });
   { let t0 = performance.now();
     const satTick = now => {
       requestAnimationFrame(satTick);
       const show = !!(lyr.data && isPlaying() && !roloOn);
-      if (!show) { sat.classList.remove('on'); if (!lyrBox.classList.contains('hidden') && !lyr.data) lyrBox.classList.add('hidden'); return; }
+      if (!show) { sat.classList.remove('on'); if (!lyrBox.classList.contains('hidden') && !lyr.data && !lyr.looking) lyrBox.classList.add('hidden'); return; }
       sat.classList.add('on');
       const cam = globe.camera().position, L = Math.hypot(cam.x, cam.y, cam.z), Rs = Math.tan(Math.asin(Math.min(0.999, GR / L))) / Math.tan(globe.camera().fov * Math.PI / 360) * (innerHeight / 2);
       const t = (now - t0) / 1000, topLimit = (document.getElementById('searchwrap') ? document.getElementById('searchwrap').getBoundingClientRect().bottom : 90) + 26;
@@ -900,7 +943,7 @@
     try { MS.setActionHandler('nexttrack', null); MS.setActionHandler('previoustrack', null); } catch (e) {}
   }
   function play(s, fly) {
-    stopWatch();
+    stopWatch(); try { lyrReset(); } catch (e) {}
     if (isBL(s)) { audio.pause(); if (hls) { hls.destroy(); hls = null; } current = s; detail(s); $('shareBtn').disabled = false; setPlayerLogo(s); $('pplay').disabled = false; ytStart('bl'); pulseT = performance.now(); if (fly) flyTo(s); return; }
     ytStop(); stopWatch();
     if (isUP(s)) { audio.pause(); if (hls) { hls.destroy(); hls = null; } current = s; detail(s); $('shareBtn').disabled = false; $('pname').textContent = s[0]; $('pmeta').textContent = 'Tuning in…'; setPlayerLogo(s); $('pplay').disabled = false; ytStart('up'); pulseT = performance.now(); if (fly) flyTo(s); return; }
