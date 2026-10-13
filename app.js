@@ -842,6 +842,10 @@
     }
     function size() { VH = sc.clientHeight || 400; H = innerWidth <= 820 ? 70 : 80; if (VH < 380) H -= 14; el.style.setProperty('--rh', (H - 10) + 'px'); sp.style.height = Math.max(1, list.length * H + VH - H) + 'px'; }
     const goTo = (i, smooth) => { i = Math.max(0, Math.min(list.length - 1, i)); snapping = true; sc.scrollTo({ top: i * H, behavior: smooth ? 'smooth' : 'auto' }); setTimeout(() => snapping = false, smooth ? 400 : 30); };
+    let lastTouch = 0, playT = 0;
+    sc.addEventListener('scroll', () => {
+      if (Date.now() - lastTouch < 3000) { clearTimeout(playT); playT = setTimeout(() => { const s = list[Math.round(sc.scrollTop / H)]; if (open && s && s !== current) { randomMode = false; play(s, false); render(); } }, 550); }
+    }, { passive: true });
     sc.addEventListener('scroll', () => {
       render(); if (snapping) return; clearTimeout(snapT);
       snapT = setTimeout(() => { const i = Math.round(sc.scrollTop / H); if (Math.abs(sc.scrollTop - i * H) > 2) goTo(i, true); }, 140);
@@ -849,21 +853,27 @@
     sc.addEventListener('click', e => {
       const y = e.clientY - sc.getBoundingClientRect().top, i = Math.round(sc.scrollTop / H + (y - VH / 2) / H);
       if (i < 0 || i >= list.length) return;
-      const s = list[i]; randomMode = false; play(s, false); goTo(i, true); render();
+      const s = list[i], mid = Math.round(sc.scrollTop / H);
+      if (i === mid && s === current) {   // touching the playing card again opens / closes its full info
+        const pn = $('panel');
+        if (!pn.classList.contains('hidden') && pn.classList.contains('single')) pn.classList.add('hidden'); else { openPanel([s], s[0], s[12] || ''); detail(s); }
+        return;
+      }
+      randomMode = false; if (i === mid) { play(s, false); render(); } else goTo(i, true);   // other cards: scroll there, and it plays when the wheel stops
     });
     const jump = e => {
       const r = az.getBoundingClientRect(), k = Math.max(0, Math.min(LET.length - 1, Math.floor((e.clientY - r.top) / r.height * LET.length)));
       let l = LET[k]; if (!(l in starts)) { for (let j = k; j < LET.length; j++) if (LET[j] in starts) { l = LET[j]; break; } }
       if (!(l in starts)) return; bub.textContent = l; bub.classList.add('on'); goTo(starts[l], false);
     };
-    az.addEventListener('pointerdown', e => { az.setPointerCapture(e.pointerId); jump(e); e.preventDefault(); });
-    az.addEventListener('pointermove', e => { if (az.hasPointerCapture(e.pointerId)) jump(e); });
+    az.addEventListener('pointerdown', e => { lastTouch = Date.now(); az.setPointerCapture(e.pointerId); jump(e); e.preventDefault(); });
+    az.addEventListener('pointermove', e => { if (az.hasPointerCapture(e.pointerId)) { lastTouch = Date.now(); jump(e); } });
     az.addEventListener('pointerup', () => { bub.classList.remove('on'); });
     az.addEventListener('pointercancel', () => { bub.classList.remove('on'); });
     const onResize = () => { if (!open) return; const i = Math.round(sc.scrollTop / H); size(); sc.scrollTop = i * H; render(); };
     addEventListener('resize', onResize); try { new ResizeObserver(onResize).observe(el); } catch (e) {}
     audio.addEventListener('playing', () => render());
-    let lastTouch = 0; ['pointerdown', 'wheel', 'touchstart'].forEach(ev => sc.addEventListener(ev, () => { lastTouch = Date.now(); }, { passive: true }));
+    ['pointerdown', 'wheel', 'touchstart'].forEach(ev => sc.addEventListener(ev, () => { lastTouch = Date.now(); }, { passive: true }));
     audio.addEventListener('loadstart', () => { if (open && !snapping && Date.now() - lastTouch > 4000 && current) { const i = list.indexOf(current); if (i >= 0) goTo(i, true); } });
     function toggle(on) {
       open = on === undefined ? !open : on;
