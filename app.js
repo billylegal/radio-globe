@@ -765,6 +765,11 @@
     let s, t = 0; do { s = pool[(Math.random() * pool.length) | 0]; } while (s === current && ++t < 5);
     if (roloOn) { rolo.spinTo(s, () => {}); return; }
     play(s, true); openPanel([s], s[0], s[12] || '');
+    if (s[2] != null) {   // swing the Earth round to the station and ease in just a touch
+      ctl.autoRotate = false; autoRotate = false; $('rotate').style.opacity = .5; centerMode = false; hover = null; stopFling(); tip.classList.add('hidden');
+      const pov = globe.pointOfView(), dl = ((((s[3] - pov.lng) % 360) + 540) % 360) - 180;
+      globe.pointOfView({ lat: s[2], lng: pov.lng + dl, altitude: pov.altitude > 1.1 ? Math.max(1.0, pov.altitude * 0.85) : pov.altitude }, 1500);
+    }
   }
   $('random').onclick = () => { randomMode = true; tries = 0; randomStation(); };
   // tap the station name / logo in the player bar to open or close its info card
