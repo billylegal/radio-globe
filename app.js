@@ -841,6 +841,41 @@
       requestAnimationFrame(tick);
     }
   }
+  // ---------- DJ stickers: search a DJ who has a photo and their sticker pops out and circles the Earth ----------
+  const djStk = new Map();
+  function spawnDJSticker(p) {
+    if (djStk.has(p.name)) return;
+    if (djStk.size >= 3) { const k = djStk.keys().next().value; djStk.get(k).el.remove(); djStk.delete(k); }
+    const el = document.createElement('div'); el.className = 'djstk';
+    el.innerHTML = '<img src="' + esc(p.photo) + '" alt="' + esc(p.name) + '" draggable="false"><i>' + esc(p.name) + '</i><b class="x" role="button" aria-label="Hide sticker">×</b>';
+    document.body.appendChild(el);
+    const o = { el, name: p.name, th: Math.random() * 6.283, born: performance.now() };
+    el.addEventListener('click', e => {
+      e.stopPropagation();   // (otherwise the click-outside handler would close the results straight away)
+      if (e.target.closest('.x')) { el.remove(); djStk.delete(p.name); return; }
+      $('ssearch').value = p.name; runSearch(p.name); $('sresults').classList.remove('hidden');
+    });
+    djStk.set(p.name, o);
+  }
+  { let last = performance.now();
+    const stkTick = now => {
+      requestAnimationFrame(stkTick);
+      const dt = Math.min(0.1, (now - last) / 1000); last = now; if (!djStk.size) return;
+      const cam = globe.camera().position, L = Math.hypot(cam.x, cam.y, cam.z), Rs = Math.tan(Math.asin(Math.min(0.999, GR / L))) / Math.tan(globe.camera().fov * Math.PI / 360) * (innerHeight / 2);
+      const small = Math.min(innerWidth, innerHeight) < 600; let i = 0;
+      for (const o of djStk.values()) {
+        const hide = roloOn || document.hidden; o.el.style.display = hide ? 'none' : ''; if (hide) continue;
+        o.th -= dt * (Math.PI * 2 / 38);   // the other way round from the shuttle
+        const A = Math.min(Rs * (1.12 + i * 0.1), innerWidth * 0.46), B = A * 0.34, c = Math.cos(o.th), s = Math.sin(o.th), TILT = 0.32 + i * 0.25;
+        const x = A * c, y = B * s, px = innerWidth / 2 + x * Math.cos(TILT) - y * Math.sin(TILT), py = innerHeight / 2 + x * Math.sin(TILT) + y * Math.cos(TILT);
+        const pop = Math.min(1, (now - o.born) / 700), w = (small ? 62 : 72) * (0.84 + 0.18 * s) * (0.3 + 0.7 * pop * (2 - pop)), d = Math.hypot(px - innerWidth / 2, py - innerHeight / 2);
+        let op = pop; if (s < 0 && !spaced) op *= Math.max(0, Math.min(1, (d - Rs * 0.97) / (w * 0.5)));
+        o.el.style.opacity = op.toFixed(3); o.el.style.pointerEvents = op > 0.5 ? 'auto' : 'none'; o.el.style.zIndex = s < 0 ? 3 : 5;
+        o.el.style.transform = 'translate(' + (px - w / 2).toFixed(1) + 'px,' + (py - w * 0.5).toFixed(1) + 'px) scale(' + (w / 70).toFixed(3) + ') rotate(' + (Math.sin(now / 900 + i) * 5).toFixed(1) + 'deg)';
+        i++;
+      }
+    };
+    requestAnimationFrame(stkTick); }
   const bhead = document.createElement('div'); bhead.id = 'bounceHead'; bhead.setAttribute('aria-hidden', 'true');
   bhead.innerHTML = '<div class="bhx"><a class="bhy" href="https://billylegal.com" target="_blank" rel="noopener" title="Billy Legal" aria-label="Billy Legal"><img src="assets/head.png" alt="" width="62" height="87"></a></div>'; document.body.appendChild(bhead);
   const showHead = on => bhead.classList.toggle('on', !!on);
@@ -1112,7 +1147,7 @@
     } return out;
   }
   const searchProfiles = q => (djProf.djs || []).filter(p => matchQ(q, p.name, (p.aka || []).join(' '))).slice(0, 3);
-  const runSearch = q => { sres = { places: searchPlaces(q), stations: searchStations(q), genres: searchGenres(q), live: searchLive(q), djs: searchDJs(q), profs: searchProfiles(q), q }; renderSearch(); };
+  const runSearch = q => { sres = { places: searchPlaces(q), stations: searchStations(q), genres: searchGenres(q), live: searchLive(q), djs: searchDJs(q), profs: searchProfiles(q), q }; renderSearch(); for (const p of sres.profs) if (p.photo) spawnDJSticker(p); };
   let st, sres = { places: [], stations: [] };
   function renderSearch() {
     const box = $('sresults'); let html = '';
