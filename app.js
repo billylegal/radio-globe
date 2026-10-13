@@ -1002,6 +1002,7 @@
   async function saveSong() {
     const s = current; if (!s) return;
     $('saveSong').classList.add('busy'); await npPoll(); $('saveSong').classList.remove('busy');
+    if (!np.title && (isUP(s) || isBL(s))) for (let i = 0; i < 8 && !np.title && current === s; i++) { await new Promise(r => setTimeout(r, 500)); await npPoll(); }   // the YouTube radios may still be tuning in
     const t = current === s ? np.title : ''; 
     if (!t) { toast(np.dead.has(s[13]) ? "This station doesn't share song titles" : 'No song title right now — try again in a moment'); return; }
     if (songs.some(x => x.t === t && x.sid === s[13])) { toast('Already saved'); return; }
