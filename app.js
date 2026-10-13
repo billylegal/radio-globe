@@ -615,6 +615,13 @@
     play(s, true); openPanel([s], s[0], s[12] || '');
   }
   $('random').onclick = () => { randomMode = true; tries = 0; randomStation(); };
+  // tap the station name / logo in the player bar to open or close its info card
+  const toggleInfo = () => {
+    if (!current) return;
+    if (!$('panel').classList.contains('hidden') && $('panel').classList.contains('single')) { $('panel').classList.add('hidden'); return; }
+    openPanel([current], current[0], current[12] || ''); detail(current);
+  };
+  ['plogo', 'pname', 'pmeta'].forEach(id => { $(id).style.cursor = 'pointer'; $(id).addEventListener('click', toggleInfo); });
   $('randomBar').onclick = () => $('random').click();
   $('rotate').onclick = () => { autoRotate = !autoRotate; ctl.autoRotate = autoRotate; $('rotate').style.opacity = autoRotate ? 1 : .5; };
   $('spaceBtn').onclick = () => setSpaced(!spaced, true);
@@ -637,6 +644,7 @@
       startElec = () => { if (++n < 6) pick(); };
       ctl.autoRotate = false; autoRotate = false; $('rotate').style.opacity = .5;
       pick();
+      if (innerWidth <= 820) $('panel').classList.add('hidden');   // phones open with the info card closed; tap the station name/logo to open it
       tap.textContent = '▶ Tap to start the radio';
       setTimeout(() => { if (audio.paused && !ytOn) tap.style.display = 'block'; }, 2500);
       ['pointerdown', 'keydown', 'touchstart'].forEach(ev => addEventListener(ev, () => { if (tap.style.display !== 'none') { tap.style.display = 'none'; if (audio.paused && current && current[1]) audio.play().catch(() => {}); } }, { passive: true }));
