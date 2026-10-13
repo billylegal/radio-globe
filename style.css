@@ -408,3 +408,19 @@ button,input,select,label{touch-action:manipulation}
 #ptitle .onair i{font:900 9px/1 system-ui;font-style:normal;letter-spacing:.12em;color:#ff4d4d}
 @keyframes onairflash{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(255,77,77,.0)}50%{opacity:.45;box-shadow:0 0 12px 2px rgba(255,77,77,.55)}}
 @media(prefers-reduced-motion:reduce){#ptitle .onair{animation:none}}
+
+/* lyrics satellite + popup */
+#sat{position:fixed;left:0;top:0;z-index:7;display:none;cursor:pointer;text-align:center;color:#dfe9ff;filter:drop-shadow(0 0 8px rgba(120,190,255,.55));will-change:transform;-webkit-tap-highlight-color:transparent}
+#sat.on{display:block;animation:satglow 2.4s ease-in-out infinite}#sat span{display:block;font:800 8.5px/1 system-ui;letter-spacing:.14em;margin-top:2px;color:var(--acc)}
+@keyframes satglow{50%{filter:drop-shadow(0 0 14px var(--acc))}}
+@media(prefers-reduced-motion:reduce){#sat.on{animation:none}}
+#lyrics{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(460px,92vw);max-height:min(70vh,70dvh);display:flex;flex-direction:column;background:var(--glass);backdrop-filter:blur(18px);border:1px solid var(--line);border-radius:16px;z-index:40;box-shadow:0 14px 50px rgba(0,0,0,.6)}
+#lyrics.hidden{display:none}
+#lyrics .lh{display:flex;justify-content:space-between;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}#lyT{font-weight:800;font-size:16px}#lyA{color:var(--dim);font-size:13px;margin-top:2px}
+#lyX{background:none;border:0;color:var(--txt);font-size:18px;cursor:pointer;align-self:flex-start}
+#lyB{white-space:pre-wrap;overflow-y:auto;padding:14px 18px;font-size:15px;line-height:1.55;text-align:center;-webkit-overflow-scrolling:touch}
+#lyrics .lf{padding:7px 14px;font-size:10.5px;color:var(--dim);border-top:1px solid var(--line);text-align:center}
+/* lock */
+#lockBtn.on{background:var(--acc)!important;color:var(--acc-ink,#04121c)!important;border-color:var(--acc)!important}
+body.locked #globe,body.locked #dots,body.locked #bullseye,body.locked #side,body.locked #sideScrim,body.locked #searchwrap,body.locked #panel,body.locked #rolo,body.locked #themepop,body.locked #favdrawer,body.locked #topbar button:not(#lockBtn),body.locked #randomBar,body.locked .sh{pointer-events:none!important}
+body.locked #topbar button:not(#lockBtn),body.locked #searchwrap,body.locked #randomBar{opacity:.35}

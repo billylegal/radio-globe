@@ -411,6 +411,67 @@
     if (speed > 10) { clearTimeout(snapT); snapT = setTimeout(settle, 250); }
   });
 
+  // ---------- Lyrics satellite: floats above the Earth while a song with lyrics is playing; tap it for the words ----------
+  const lyr = { key: '', data: null, cache: new Map(), tok: 0 };
+  const sat = document.createElement('div'); sat.id = 'sat'; sat.title = 'Lyrics'; sat.setAttribute('role', 'button'); sat.setAttribute('aria-label', 'Show lyrics');
+  sat.innerHTML = '<svg viewBox="0 0 64 44" width="54" height="37" aria-hidden="true"><g stroke="#0b1020" stroke-width="1.2" stroke-linejoin="round"><rect x="2" y="13" width="19" height="14" rx="1.5" fill="#4fa3ff"/><rect x="43" y="13" width="19" height="14" rx="1.5" fill="#4fa3ff"/><path d="M2 20h19M43 20h19M8 13v14M14 13v14M49 13v14M55 13v14" stroke="#cfe6ff" stroke-width=".8" fill="none"/><rect x="21" y="16" width="22" height="8" fill="#9aa7b8"/><rect x="25" y="9" width="14" height="22" rx="3" fill="#e8eef7"/><circle cx="32" cy="20" r="4" fill="var(--acc,#39ff14)"/></g><path d="M32 9V3" stroke="#e8eef7" stroke-width="1.5"/><circle cx="32" cy="2.5" r="2" fill="var(--acc,#39ff14)"/><path d="M26 40q6-5 12 0" stroke="var(--acc,#39ff14)" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg><span>LYRICS</span>';
+  document.body.appendChild(sat);
+  const lyrBox = document.createElement('div'); lyrBox.id = 'lyrics'; lyrBox.className = 'hidden';
+  lyrBox.innerHTML = '<div class="lh"><div><div id="lyT"></div><div id="lyA"></div></div><button id="lyX" aria-label="Close lyrics">✕</button></div><div id="lyB"></div><div class="lf">Lyrics from LRCLIB · for personal listening</div>';
+  document.body.appendChild(lyrBox);
+  function parseSong(t) {
+    const s = String(t || '').replace(/\s*[\(\[][^)\]]*(remaster|version|edit|mix|live|feat|ft\.?|official|video|radio|explicit|lyrics?)[^)\]]*[\)\]]/ig, '').replace(/\s+/g, ' ').trim();
+    const m = s.split(/\s[-–—]\s/); return m.length >= 2 ? { artist: m[0].trim(), track: m.slice(1).join(' - ').trim() } : { artist: '', track: s };
+  }
+  async function fetchLyrics(t) {
+    const { artist, track } = parseSong(t); if (!track || track.length < 2) return null;
+    const J = async u => { const r = await fetch(u); return r.ok ? r.json() : null; }, enc = encodeURIComponent;
+    const good = d => d && (d.plainLyrics || '').trim().length > 40 && !d.instrumental;
+    try {
+      if (artist) { const d = await J('https://lrclib.net/api/get?artist_name=' + enc(artist) + '&track_name=' + enc(track)); if (good(d)) return { t: d.trackName, a: d.artistName, text: d.plainLyrics.trim() }; }
+      const res = await J('https://lrclib.net/api/search?q=' + enc((artist + ' ' + track).trim())) || [];
+      const ft = fold(track), fa = fold(artist);
+      const hit = res.find(d => good(d) && (fold(d.trackName).includes(ft) || ft.includes(fold(d.trackName))) && (!fa || fold(d.artistName).includes(fa.split(' ')[0]) || fa.includes(fold(d.artistName).split(' ')[0])));
+      return hit ? { t: hit.trackName, a: hit.artistName, text: hit.plainLyrics.trim() } : null;
+    } catch (e) { return null; }
+  }
+  async function lyricsFor(title) {
+    title = (title || '').trim(); if (title === lyr.key) return;
+    lyr.key = title; lyr.data = null; const my = ++lyr.tok; lyrBox.classList.add('hidden'); if (!title) return;
+    if (lyr.cache.has(title)) { lyr.data = lyr.cache.get(title); return; }
+    const d = await fetchLyrics(title); lyr.cache.set(title, d); if (lyr.cache.size > 80) lyr.cache.delete(lyr.cache.keys().next().value);
+    if (my === lyr.tok) lyr.data = d;
+  }
+  sat.addEventListener('click', () => {
+    if (!lyr.data) return; $('lyT').textContent = lyr.data.t; $('lyA').textContent = lyr.data.a; $('lyB').textContent = lyr.data.text; $('lyB').scrollTop = 0; lyrBox.classList.toggle('hidden');
+  });
+  lyrBox.querySelector('#lyX').addEventListener('click', () => lyrBox.classList.add('hidden'));
+  addEventListener('keydown', e => { if (e.key === 'Escape') lyrBox.classList.add('hidden'); });
+  { let t0 = performance.now();
+    const satTick = now => {
+      requestAnimationFrame(satTick);
+      const show = !!(lyr.data && isPlaying() && !roloOn);
+      if (!show) { sat.classList.remove('on'); if (!lyrBox.classList.contains('hidden') && !lyr.data) lyrBox.classList.add('hidden'); return; }
+      sat.classList.add('on');
+      const cam = globe.camera().position, L = Math.hypot(cam.x, cam.y, cam.z), Rs = Math.tan(Math.asin(Math.min(0.999, GR / L))) / Math.tan(globe.camera().fov * Math.PI / 360) * (innerHeight / 2);
+      const t = (now - t0) / 1000, topLimit = (document.getElementById('searchwrap') ? document.getElementById('searchwrap').getBoundingClientRect().bottom : 90) + 26;
+      const x = innerWidth / 2 - Math.min(Rs * 0.62, innerWidth * 0.3) + Math.sin(t * 0.6) * 9, y = Math.max(topLimit, innerHeight / 2 - Rs * 1.1) + Math.sin(t * 0.9) * 6;
+      sat.style.transform = 'translate(' + (x - 27).toFixed(1) + 'px,' + (y - 18).toFixed(1) + 'px) rotate(' + (Math.sin(t * 0.5) * 6).toFixed(1) + 'deg)';
+    };
+    requestAnimationFrame(satTick); }
+
+  // ---------- Lock: freeze the Earth on this station; nothing on the globe/menus moves until you unlock ----------
+  let locked = false;
+  function setLock(on) {
+    locked = on; document.body.classList.toggle('locked', on); const b = $('lockBtn'); b.textContent = on ? '🔒' : '🔓'; b.classList.toggle('on', on); b.title = on ? 'Unlock the Earth' : 'Lock the Earth on this station';
+    if (on) {
+      stopFling(); ctl.autoRotate = false; autoRotate = false; $('rotate').style.opacity = .5; clearTimeout(snapT); dragMoved = false; drag = false; tip.classList.add('hidden');
+      if (current && current[2] != null) { const pov = globe.pointOfView(), dl = ((((current[3] - pov.lng) % 360) + 540) % 360) - 180; ctl.enableDamping = false; globe.pointOfView({ lat: current[2], lng: pov.lng + dl, altitude: pov.altitude }, 800); setTimeout(() => { ctl.enableDamping = true; }, 850); }
+      toast('🔒 Locked on ' + (current ? current[0] : 'this view') + ' · tap 🔒 to unlock');
+    } else toast('🔓 Unlocked');
+  }
+  $('lockBtn').onclick = () => setLock(!locked);
+
   // ---------- Live now: DJ sets streaming right now + tonight's events ----------
   let liveData = { items: [] }, socialData = { items: [] }, djIndex = { djs: [] }, liveQ = '', evData = { items: [] }, liveItems = [], evItems = [], liveTab = 'yt', liveOpen = false, watching = null, liveFam = '';
   async function loadLive() {
@@ -869,7 +930,7 @@
   audio.addEventListener('stalled', () => { if (audio.readyState < 3) $('pmeta').textContent = 'Buffering…'; });
   const prevPlayClick = $('pplay').onclick = () => { if (Date.now() - lastUnmute < 600) return; if (ytOn && yt && yt.getPlayerState) { ytPlaying ? yt.pauseVideo() : yt.playVideo(); return; } if (!current) return; audio.paused ? audio.play().catch(failed) : audio.pause(); };
   function randomStation() {
-    if (!shown.length) return; randomMode = true;
+    if (locked) return; if (!shown.length) return; randomMode = true;
     const bad = new Set(lsGet('rg-bad')); let pool = shown.filter(x => x[1]); if (!pool.length) return;
     const fast = pool.filter(x => fastOK(x) && !bad.has(x[13])); if (fast.length > 20) pool = fast;
     let s, t = 0; do { s = pool[(Math.random() * pool.length) | 0]; } while (s === current && ++t < 5);
@@ -934,6 +995,7 @@
   }
   addEventListener('keydown', e => {
     if (/INPUT/.test(document.activeElement.tagName)) return;
+    if (locked && e.code !== 'Space') return;   // locked: only play / pause works
     if (e.key === 'n' || e.key === 'N') $('random').click();
     if (e.key === 'f' || e.key === 'F') toggleDrawer();
     if ((e.key === 'z' || e.key === 'Z') && current) zoomTo(current);
@@ -1214,7 +1276,7 @@
     } catch (e) { return null; }
   }
   const cleanTitle = (t, s) => { t = (t || '').replace(/\s+/g, ' ').replace(/^[-–\s]+|[-–\s]+$/g, ''); return t.length < 3 || t.toLowerCase() === s[0].toLowerCase() ? '' : t; };
-  function npSet(t) { np.title = t || ''; $('pnow').textContent = np.title ? '♪ ' + np.title : ''; $('saveSong').classList.toggle('ready', !!np.title); try { audio.dispatchEvent(new Event('npchange')); } catch (e) {} }
+  function npSet(t) { np.title = t || ''; $('pnow').textContent = np.title ? '♪ ' + np.title : ''; $('saveSong').classList.toggle('ready', !!np.title); try { audio.dispatchEvent(new Event('npchange')); } catch (e) {} try { lyricsFor(np.title); } catch (e) {} }
   async function npPoll() {
     const s = current;
     if (s && (isUP(s) || isBL(s))) {   // YouTube-based radios know their own song
