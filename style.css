@@ -376,3 +376,8 @@ button,input,select,label{touch-action:manipulation}
 #loading{transition:opacity .6s ease}#loading.fading{opacity:0;pointer-events:none}
 
 #globe{cursor:grab}#globe.grabbing{cursor:grabbing}
+
+/* save-song button: note with tiny "SAVE SONG" under it */
+#saveSong{display:grid!important;place-content:center;justify-items:center;gap:1px;padding:0;line-height:1}
+#saveSong .ni{font-size:15px!important;line-height:1}
+#saveSong .nt{font-size:6px;font-weight:800;letter-spacing:.02em;line-height:1;white-space:nowrap;opacity:.9}
