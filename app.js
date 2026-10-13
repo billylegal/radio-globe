@@ -440,13 +440,24 @@
     const s = String(t || '').replace(/\s*[\(\[][^)\]]*(remaster|version|edit|mix|live|feat|ft\.?|official|video|radio|explicit|lyrics?)[^)\]]*[\)\]]/ig, '').replace(/\s+/g, ' ').trim();
     const m = s.split(/\s[-–—]\s/); return m.length >= 2 ? { artist: m[0].trim(), track: m.slice(1).join(' - ').trim() } : { artist: '', track: s };
   }
+  // AI lyrics (made on the PC for songs LRCLIB lacks): index of finished songs, files named by a hash of the folded title
+  let aiIdx = {}; const aiKeyOf = async t => { const f = String(t || '').toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim(); const b = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(f)); return [...new Uint8Array(b)].slice(0, 6).map(x => x.toString(16).padStart(2, '0')).join(''); };
+  async function loadAiIdx() { try { aiIdx = (await (await fetch('data/ai_lyrics_index.json?t=' + Date.now())).json()).items || {}; } catch (e) {} }
+  loadAiIdx(); setInterval(loadAiIdx, 120000);
+  async function aiLyrics(title) {
+    try {
+      const k = await aiKeyOf(title); if (!aiIdx[k]) return null;
+      const d = await (await fetch('data/ai_lyrics/' + k + '.json')).json(), { artist, track } = parseSong(title);
+      return d.lines && d.lines.length ? { t: track || title, a: artist, text: d.lines.map(x => x.l).join('\n'), sync: d.lines.map(x => ({ t: x.t, l: x.l })), dur: 0, ai: true } : null;
+    } catch (e) { return null; }
+  }
   function parseLRC(s) {   // "[01:23.45] words" -> [{t: seconds, l: 'words'}]
     if (!s) return null; const out = [];
     for (const row of s.split('\n')) { const m = /^\s*((?:\[\d+:\d+(?:\.\d+)?\]\s*)+)(.*)$/.exec(row); if (!m) continue; for (const ts of m[1].match(/\[(\d+):(\d+(?:\.\d+)?)\]/g)) { const mm = /\[(\d+):(\d+(?:\.\d+)?)\]/.exec(ts); out.push({ t: +mm[1] * 60 + +mm[2], l: m[2].trim() }); } }
     out.sort((x, y) => x.t - y.t); return out.length > 4 ? out : null;
   }
   async function fetchLyrics(t) {
-    const { artist, track } = parseSong(t); if (!track || track.length < 2) return null;
+    const title = t, { artist, track } = parseSong(t); if (!track || track.length < 2) return null;
     const J = async u => { const r = await fetch(u); return r.ok ? r.json() : null; }, enc = encodeURIComponent;
     const good = d => d && (d.plainLyrics || '').trim().length > 40 && !d.instrumental;
     try {
@@ -455,8 +466,8 @@
       const res = await J('https://lrclib.net/api/search?q=' + enc((artist + ' ' + track).trim())) || [];
       const ft = fold(track), fa = fold(artist);
       const hit = res.find(d => good(d) && (fold(d.trackName).includes(ft) || ft.includes(fold(d.trackName))) && (!fa || fold(d.artistName).includes(fa.split(' ')[0]) || fa.includes(fold(d.artistName).split(' ')[0])));
-      return hit ? pack(hit) : null;
-    } catch (e) { return null; }
+      return hit ? pack(hit) : await aiLyrics(title);
+    } catch (e) { return await aiLyrics(title); }
   }
   async function lyricsFor(title) {
     title = (title || '').trim(); if (title === lyr.key) return;
@@ -477,7 +488,7 @@
     return (performance.now() - lyr.t0) / 1000 - lag + lyr.adj;
   }
   function paintLyrics() {
-    const d = lyr.data; $('lyT').textContent = d.t; $('lyA').textContent = d.a; lyr.idx = -1;
+    const d = lyr.data; $('lyT').textContent = d.t; $('lyA').textContent = d.a + (d.ai ? (d.a ? ' · ' : '') + '🤖 AI-transcribed, may contain mistakes' : ''); lyr.idx = -1;
     if (d.sync) { $('lyB').innerHTML = d.sync.map((r, i) => '<div class="ll" data-i="' + i + '">' + (r.l ? esc(r.l) : '♪') + '</div>').join(''); lyrBox.classList.add('sync'); }
     else { $('lyB').textContent = d.text; lyrBox.classList.remove('sync'); }
     $('lyB').scrollTop = 0;
