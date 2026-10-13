@@ -540,7 +540,6 @@
 
   // ---------- Lock: the MUSIC is locked (no station change from Random, clicks, searches, snapping, Social Live...); spin and zoom the globe freely ----------
   let locked = false;
-  window.__t = { pov: () => globe.pointOfView(), locked: () => locked }; // DEBUG-REMOVE
   const lockMsg = () => toast('🔒 Music is locked · tap 🔒 to unlock');
   function setLock(on) {
     locked = on; document.body.classList.toggle('locked', on); const b = $('lockBtn'); b.textContent = on ? '🔒' : '🔓'; b.classList.toggle('on', on); b.title = on ? 'Music locked: tap to unlock' : 'Lock the music (you can still spin the globe)';
