@@ -7,8 +7,11 @@
   const res = await fetch('data/stations.json', { cache: 'no-cache' });
   const DB = await res.json();
   const G = DB.genres, S = DB.stations;
-  $('loading').classList.add('hidden');
   const famOf = G.map(g => g.family);
+
+  let revealed = false;
+  function reveal() { if (revealed) return; revealed = true; const l = $('loading'); l.classList.add('fading'); setTimeout(() => l.classList.add('hidden'), 650); }
+  setTimeout(reveal, 7000);   // never keep the cover up for ever
 
   // ---------- state ----------
   const BAND = ['Online', 'FM', 'AM', 'Shortwave', 'DAB'];
@@ -79,6 +82,7 @@
     .globeTileEngineMaxLevel(19)
     .atmosphereColor('#6ab7ff').atmosphereAltitude(0.18)
     .labelLat(c => c[2]).labelLng(c => c[3]).labelText(c => c[0]).labelSize(c => globe.pointOfView().altitude * (0.55 + Math.min(0.35, Math.log10(c[6] + 10) * 0.045))).labelDotRadius(c => globe.pointOfView().altitude * 0.16).labelColor(() => 'rgba(255,255,255,.95)').labelResolution(2).labelAltitude(0.0008)
+    .onGlobeReady(() => setTimeout(reveal, 350))
     .onZoom(() => schedule());
   const ctl = globe.controls();
   ctl.autoRotate = true; ctl.autoRotateSpeed = 0.35; ctl.minDistance = 100.12; ctl.maxDistance = 520; ctl.zoomSpeed = 0.9; ctl.enableDamping = true;
@@ -169,8 +173,9 @@
   }
   const bz = document.getElementById('bullseye');
   let lastCam = '';
-  function frame() {
-    requestAnimationFrame(frame);
+  let drawnAt = 0;
+  function frame() {   // called right after every WebGL render, so the dots are always painted for the exact camera the globe was just drawn with
+    drawnAt = performance.now();
     const cam = globe.camera(), key = cam.position.x.toFixed(3) + cam.position.y.toFixed(3) + cam.position.z.toFixed(3) + innerWidth;
     const lv = level(), pulsing = (current && (lv > 0 || performance.now() - pulseT < 3000)) || liveItems.length > 0;
     if (key === lastCam && !dirty && !pulsing) return;
@@ -244,7 +249,6 @@
     }
     updateReticle();
   }
-  requestAnimationFrame(frame);
   // the bullseye lock-on, the hover highlight and the click all use the same rule, so what it locks onto is what you get
   function pickAt(x, y, touch) { const d = pickNear(x, y, touch ? 34 : 20); return d ? d.c : null; }
   const gEl = $('globe'), tip = document.createElement('div'); tip.id = 'dtip'; tip.className = 'tip hidden'; document.body.appendChild(tip);
@@ -269,7 +273,6 @@
     bz.style.transform = 'translate(' + (x - 56).toFixed(1) + 'px,' + (y - 56).toFixed(1) + 'px)'; bz.classList.toggle('lock', !!d);
   }
   gEl.addEventListener('pointermove', e => { ptr = [e.clientX, e.clientY]; if (!e.buttons) updateReticle(e.pointerType === 'touch' ? 34 : 20); });
-  ctl.addEventListener('change', () => { draw(); });
 
   // ---------- Radio Garden style: scroll the globe and the dot under the centre scope is selected; let go and it settles onto it and plays ----------
   let centerMode = false, drag = false, dragMoved = false, snapping = false, autoPick = null, snapT = 0, lastPtr = null;
@@ -307,6 +310,7 @@
   });
   // --- grab-the-point dragging: the spot of the Earth under your finger/cursor stays under it (like Radio Garden), with a smooth fling when you let go ---
   ctl.enableRotate = false;   // we rotate; OrbitControls keeps zoom / pinch
+  ctl.minPolarAngle = 0.22; ctl.maxPolarAngle = Math.PI - 0.22;   // stop short of the poles, where north-up dragging would swirl the globe
   const GR = 100;
   function rayHit(px, py) {
     const cam = globe.camera(), cp = cam.position, L = Math.hypot(cp.x, cp.y, cp.z);
@@ -348,19 +352,22 @@
     if (sm.length < 2) return;
     let wx = 0, wy = 0, wz = 0; for (const q of sm) { wx += q.n[0] * q.ang; wy += q.n[1] * q.ang; wz += q.n[2] * q.ang; }
     const dt = Math.max(30, sm[sm.length - 1].t - sm[0].t + 16) / 1000; let om = [wx / dt, wy / dt, wz / dt];
-    const alt = globe.pointOfView().altitude, pxPerRad = GR * innerHeight / (0.93 * GR * (1 + alt)), maxW = 3200 / pxPerRad;   // cap the fling speed
+    const alt = globe.pointOfView().altitude, pxPerRad = GR * innerHeight / (0.93 * GR * (1 + alt)), maxW = 1200 / pxPerRad;   // cap the fling speed (a steady glide, never a runaway spin)
     let w = Math.hypot(om[0], om[1], om[2]); if (w > maxW) { om = om.map(v => v * maxW / w); w = maxW; }
-    if (w * pxPerRad < 60) return;
+    if (w * pxPerRad < 140) return;   // small drags just stop where you let go
     let last = performance.now(), cur = w; const dir = om.map(v => v / w);
     const step = now => {
       const dt2 = Math.min(0.05, (now - last) / 1000); last = now;
-      cur *= Math.exp(-dt2 / 0.5);   // glide: velocity halves about every 0.35 s
+      cur *= Math.exp(-dt2 / 0.3);   // quick, controlled glide: velocity halves about every 0.2 s
       spinCam(dir, cur * dt2);
       if (cur * pxPerRad > 6) flingRaf = requestAnimationFrame(step); else flingRaf = 0;
     };
     flingRaf = requestAnimationFrame(step);
   };
   addEventListener('pointerup', grabEnd, true); addEventListener('pointercancel', grabEnd, true);
+  // dots in lock-step with the globe: paint them in the same frame, straight after the renderer draws (no lag / lingering when it spins)
+  { const rr = globe.renderer(), orig = rr.render; rr.render = function () { const out = orig.apply(this, arguments); try { frame(); if (centerMode) trackCenter(); } catch (e) {} return out; }; }
+  setInterval(() => { if (performance.now() - drawnAt > 600) { try { frame(); } catch (e) {} } }, 400);   // safety net if the renderer ever stops
 
   addEventListener('pointermove', e => {
     if (drag && !dragMoved && lastPtr && Math.hypot(e.clientX - lastPtr[0], e.clientY - lastPtr[1]) > 5) { dragMoved = true; centerMode = true; tip.classList.add('hidden'); }
@@ -370,7 +377,6 @@
   addEventListener('pointerup', dragEnd, true); addEventListener('pointercancel', dragEnd, true); addEventListener('blur', () => dragEnd());
   let lastCamPos = null, lastCamT = 0;   // "still moving?" = the surface slides faster than ~10 px/s (ignores the long slow damping tail, at any frame rate)
   ctl.addEventListener('change', () => {
-    trackCenter();
     if (drag || !dragMoved) return;
     const cp = globe.camera().position, now = performance.now(), alt = globe.pointOfView().altitude, pxPerUnit = innerHeight / (0.93 * 100 * (1 + alt));
     const speed = lastCamPos ? cp.distanceTo(lastCamPos) * pxPerUnit / Math.max(0.001, (now - lastCamT) / 1000) : 1e9;
@@ -1059,7 +1065,7 @@
     function intro() { if (!open || !current) return; build(); const i = list.indexOf(current); if (i < 0) return; sc.scrollTop = 0; render(); spinTo(current, () => { if (audio.paused) play(current, false); }); }
     return { intro, spinTo, showCustom, reveal, isOpen: () => open, refresh() { custom = null; if (open) { src = null; build(); size(); goTo(0, false); render(); } else src = null; }, toggle };
   })();
-  { let pref = null; try { pref = localStorage.getItem('rg-rolo'); } catch (e) {} if (pref === '1' || (pref === null && innerWidth <= 820)) { rolo.toggle(true); rolo.intro(); } }   // phones start on the Rolodex unless you last left it elsewhere
+  // (always opens in Earth view on every device; Rolodex only when you pick it)
   { const af = applyFilter; applyFilter = function () { af.apply(this, arguments); rolo.refresh(); }; }
 
   // ---------- now playing (song titles read from the stream) + saved songs ----------

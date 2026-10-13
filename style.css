@@ -372,3 +372,5 @@ button,input,select,label{touch-action:manipulation}
 
 .sa a.srch{opacity:1;border-style:solid}
 .sa a.found{background:var(--acc);color:var(--acc-ink,#000);border-color:var(--acc);font-weight:700}
+
+#loading{transition:opacity .6s ease}#loading.fading{opacity:0;pointer-events:none}
