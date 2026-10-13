@@ -607,6 +607,7 @@
   }
   audio.addEventListener('playing', () => { $('pplay').textContent = '❚❚'; $('pmeta').textContent = [current[15], current[12], current[11].slice(0, 3).map(x => G[x].name).join(', '), current[6] + (current[7] ? ' ' + current[7] + 'k' : ''), current[8] ? 'approx. location' : ''].filter(Boolean).join(' · '); });
   audio.addEventListener('pause', () => $('pplay').textContent = '▶');
+  audio.addEventListener('play', () => { if (!ytOn) $('pplay').textContent = '❚❚'; });
   audio.addEventListener('error', failed);
   audio.addEventListener('stalled', () => { if (audio.readyState < 3) $('pmeta').textContent = 'Buffering…'; });
   const prevPlayClick = $('pplay').onclick = () => { if (ytOn && yt && yt.getPlayerState) { ytPlaying ? yt.pauseVideo() : yt.playVideo(); return; } if (!current) return; audio.paused ? audio.play().catch(failed) : audio.pause(); };
@@ -651,10 +652,10 @@
       ctl.autoRotate = false; autoRotate = false; $('rotate').style.opacity = .5;
       pick();
       $('panel').classList.add('hidden');   // opens with the info card closed; tap the station name/logo to open it
-      tap.textContent = '▶ Tap to start the radio';
-      setTimeout(() => { if (audio.paused && !ytOn) tap.style.display = 'block'; }, 2500);
-      ['pointerdown', 'keydown', 'touchstart'].forEach(ev => addEventListener(ev, () => { if (tap.style.display !== 'none') { tap.style.display = 'none'; if (audio.paused && current && current[1]) audio.play().catch(() => {}); } }, { passive: true }));
-      setInterval(() => { if (tap.style.display !== 'none' && !audio.paused) tap.style.display = 'none'; }, 700);
+      // browsers may block sound until the first touch: start the station on the first touch/key anywhere (but not on the player's own buttons)
+      let unlocked = false;
+      const firstGesture = ev => { if (unlocked) return; if (ev.target && ev.target.closest && ev.target.closest('#player')) { unlocked = true; return; } unlocked = true; if (audio.paused && current && current[1]) audio.play().catch(() => {}); };
+      ['pointerdown', 'keydown', 'touchstart'].forEach(evn => addEventListener(evn, firstGesture, { passive: true }));
     } else if (up) {
       play(up, false);
       ctl.autoRotate = false; autoRotate = false; $('rotate').style.opacity = .5;
@@ -899,9 +900,11 @@
     function showCustom(l, label) { custom = l; customLabel = label; src = null; build(); size(); sp.style.height = Math.max(1, list.length * H + VH - H) + 'px'; goTo(0, false); render(); }
     // search result for one station: bring it to the front of the wheel and play it (no info card until it's touched)
     function reveal(s) { if (list.indexOf(s) < 0) { custom = null; src = null; build(); size(); } spinTo(s, () => play(s, false)); }
-    return { spinTo, showCustom, reveal, isOpen: () => open, refresh() { custom = null; if (open) { src = null; build(); size(); goTo(0, false); render(); } else src = null; }, toggle };
+    // at launch: wheel starts at the top, then spins down to the opening station and plays it
+    function intro() { if (!open || !current) return; build(); const i = list.indexOf(current); if (i < 0) return; sc.scrollTop = 0; render(); spinTo(current, () => { if (audio.paused) play(current, false); }); }
+    return { intro, spinTo, showCustom, reveal, isOpen: () => open, refresh() { custom = null; if (open) { src = null; build(); size(); goTo(0, false); render(); } else src = null; }, toggle };
   })();
-  { let pref = null; try { pref = localStorage.getItem('rg-rolo'); } catch (e) {} if (pref === '1' || (pref === null && innerWidth <= 820)) rolo.toggle(true); }   // phones start on the Rolodex unless you last left it elsewhere
+  { let pref = null; try { pref = localStorage.getItem('rg-rolo'); } catch (e) {} if (pref === '1' || (pref === null && innerWidth <= 820)) { rolo.toggle(true); rolo.intro(); } }   // phones start on the Rolodex unless you last left it elsewhere
   { const af = applyFilter; applyFilter = function () { af.apply(this, arguments); rolo.refresh(); }; }
   // ---------- genre sidebar ----------
   const fams = [...new Set(G.map(g => g.family))];
