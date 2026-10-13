@@ -566,8 +566,8 @@
   // phone lock screen / notification player: station name, location, play & pause (the stream itself is a normal audio element, so phones keep it going in the background)
   if ('mediaSession' in navigator && typeof MediaMetadata !== 'undefined') {
     const MS = navigator.mediaSession;
-    const msUpdate = () => { const s = current; if (!s) return; try { MS.metadata = new MediaMetadata({ title: s[0], artist: [s[15], s[12]].filter(Boolean).join(' · ') || 'Radio Globe', album: 'A View From Space · Radio Globe', artwork: [{ src: 'assets/icon/radio-globe-512.png', sizes: '512x512', type: 'image/png' }] }); MS.playbackState = audio.paused ? 'paused' : 'playing'; } catch (e) {} };
-    ['play', 'playing', 'pause', 'loadedmetadata'].forEach(ev => audio.addEventListener(ev, msUpdate));
+    const msUpdate = () => { const s = current; if (!s) return; try { MS.metadata = new MediaMetadata({ title: (typeof np !== 'undefined' && np.sid === s[13] && np.title) || s[0], artist: [s[15], s[12]].filter(Boolean).join(' · ') || 'Radio Globe', album: 'A View From Space · Radio Globe', artwork: [{ src: 'assets/icon/radio-globe-512.png', sizes: '512x512', type: 'image/png' }] }); MS.playbackState = audio.paused ? 'paused' : 'playing'; } catch (e) {} };
+    ['play', 'playing', 'pause', 'loadedmetadata', 'npchange'].forEach(ev => audio.addEventListener(ev, msUpdate));
     try { MS.setActionHandler('play', () => { audio.play().catch(() => {}); }); } catch (e) {}
     try { MS.setActionHandler('pause', () => { audio.pause(); }); } catch (e) {}
     try { MS.setActionHandler('stop', () => { audio.pause(); }); } catch (e) {}
@@ -936,6 +936,80 @@
   })();
   { let pref = null; try { pref = localStorage.getItem('rg-rolo'); } catch (e) {} if (pref === '1' || (pref === null && innerWidth <= 820)) { rolo.toggle(true); rolo.intro(); } }   // phones start on the Rolodex unless you last left it elsewhere
   { const af = applyFilter; applyFilter = function () { af.apply(this, arguments); rolo.refresh(); }; }
+
+  // ---------- now playing (song titles read from the stream) + saved songs ----------
+  const np = { title: '', sid: '', dead: new Set() };
+  async function icyTitle(url) {   // classic Shoutcast/Icecast in-stream metadata (works where the station allows browser access)
+    const ac = new AbortController(), to = setTimeout(() => ac.abort(), 7000);
+    try {
+      const r = await fetch(url, { headers: { 'Icy-MetaData': '1' }, signal: ac.signal, cache: 'no-store' });
+      const mi = +r.headers.get('icy-metaint'); if (!mi) return null;
+      const rd = r.body.getReader(); let buf = new Uint8Array(0);
+      for (;;) {
+        const { value, done } = await rd.read(); if (done) break;
+        const n = new Uint8Array(buf.length + value.length); n.set(buf); n.set(value, buf.length); buf = n;
+        if (buf.length > mi) { const len = buf[mi] * 16; if (buf.length >= mi + 1 + len) { const txt = new TextDecoder().decode(buf.subarray(mi + 1, mi + 1 + len)); const m = txt.match(/StreamTitle='([^]*?)';/); return m ? m[1].trim() : ''; } }
+        if (buf.length > mi + 4200) break;
+      }
+      return '';
+    } catch (e) { return null; } finally { clearTimeout(to); ac.abort(); }
+  }
+  async function icecastTitle(url) {   // Icecast servers often also publish /status-json.xsl
+    try {
+      const u = new URL(url), ac = new AbortController(), to = setTimeout(() => ac.abort(), 5000);
+      const r = await fetch(u.origin + '/status-json.xsl', { cache: 'no-store', signal: ac.signal }); clearTimeout(to);
+      const j = await r.json(); let src = j.icestats && j.icestats.source; if (!src) return null; if (!Array.isArray(src)) src = [src];
+      const m = src.find(x => (x.listenurl || '').endsWith(u.pathname)) || (src.length === 1 ? src[0] : null); if (!m) return null;
+      return String(m.title || m.yp_currently_playing || '').trim();
+    } catch (e) { return null; }
+  }
+  const cleanTitle = (t, s) => { t = (t || '').replace(/\s+/g, ' ').replace(/^[-–\s]+|[-–\s]+$/g, ''); return t.length < 3 || t.toLowerCase() === s[0].toLowerCase() ? '' : t; };
+  function npSet(t) { np.title = t || ''; $('pnow').textContent = np.title ? '♪ ' + np.title : ''; $('saveSong').classList.toggle('ready', !!np.title); try { audio.dispatchEvent(new Event('npchange')); } catch (e) {} }
+  async function npPoll() {
+    const s = current; if (!s || !s[1] || isUP(s) || isBL(s) || ytOn || audio.paused || /\.m3u8(\?|$)/i.test(s[1])) return;
+    if (np.sid !== s[13]) { np.sid = s[13]; npSet(''); }
+    if (np.dead.has(s[13])) return;
+    let t = await icyTitle(s[1]); if (t === null) t = await icecastTitle(s[1]);
+    if (current !== s) return;
+    if (t === null) { np.dead.add(s[13]); return; }   // this station publishes nothing readable from a browser
+    npSet(cleanTitle(t, s));
+  }
+  setInterval(npPoll, 20000);
+  audio.addEventListener('loadstart', () => { np.sid = ''; npSet(''); });
+  audio.addEventListener('playing', () => setTimeout(npPoll, 600));
+
+  let songs = []; try { songs = JSON.parse(localStorage.getItem('rg-songs') || '[]'); } catch (e) {}
+  const saveSongs = () => { try { localStorage.setItem('rg-songs', JSON.stringify(songs)); } catch (e) {} $('songsN').textContent = songs.length; };
+  $('songsN').textContent = songs.length;
+  async function saveSong() {
+    const s = current; if (!s) return;
+    $('saveSong').classList.add('busy'); await npPoll(); $('saveSong').classList.remove('busy');
+    const t = current === s ? np.title : ''; 
+    if (!t) { toast(np.dead.has(s[13]) ? "This station doesn't share song titles" : 'No song title right now — try again in a moment'); return; }
+    if (songs.some(x => x.t === t && x.sid === s[13])) { toast('Already saved'); return; }
+    songs.unshift({ t, st: s[0], sid: s[13], cc: s[12] || '', ts: Date.now() }); saveSongs(); toast('🎵 Saved: ' + t); if (!$('songs').classList.contains('hidden')) renderSongs();
+  }
+  $('saveSong').onclick = saveSong;
+  const q = encodeURIComponent;
+  function renderSongs() {
+    $('songsCount').textContent = songs.length;
+    $('songsList').innerHTML = songs.length ? songs.map((x, i) => '<div class="srow" data-i="' + i + '"><div class="st"><div class="sn">' + esc(x.t) + '</div><div class="sm">' + esc([x.st, x.cc, new Date(x.ts).toLocaleDateString()].filter(Boolean).join(' · ')) + '</div>' +
+      '<div class="sa"><a href="https://www.youtube.com/results?search_query=' + q(x.t) + '" target="_blank" rel="noopener">▶ YouTube</a><a href="https://open.spotify.com/search/' + q(x.t) + '" target="_blank" rel="noopener">Spotify</a><a href="https://music.apple.com/search?term=' + q(x.t) + '" target="_blank" rel="noopener">Apple</a><button data-a="tune">📻 Station</button></div></div>' +
+      '<button class="sdel" data-a="del" title="Remove">✕</button></div>').join('') : '<div class="fempty">No songs saved yet.<br>Tap 🎵 in the player bar while a song with a title is playing.</div>';
+  }
+  const songsOpen = on => { $('songs').classList.toggle('hidden', !on); $('songsTop').classList.toggle('on', on); if (on) renderSongs(); };
+  $('songsTop').onclick = () => songsOpen($('songs').classList.contains('hidden'));
+  $('songsClose').onclick = () => songsOpen(false);
+  $('songsCopy').onclick = () => { if (songs.length) copy(songs.map(x => x.t + '  [' + x.st + (x.cc ? ', ' + x.cc : '') + ']').join('\n'), 'Song list'); };
+  $('songsDl').onclick = () => {
+    if (!songs.length) return; const csv = 'Song,Station,Country,Saved\n' + songs.map(x => [x.t, x.st, x.cc, new Date(x.ts).toISOString().slice(0, 10)].map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\n');
+    const el = document.createElement('a'); el.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); el.download = 'my-radio-songs.csv'; el.click(); setTimeout(() => URL.revokeObjectURL(el.href), 2000);
+  };
+  $('songsList').addEventListener('click', e => {
+    const b = e.target.closest('button[data-a]'); if (!b) return; const i = +b.closest('.srow').dataset.i, x = songs[i]; if (!x) return;
+    if (b.dataset.a === 'del') { songs.splice(i, 1); saveSongs(); renderSongs(); }
+    else { const st = S.find(z => z[13] === x.sid); if (st) { randomMode = false; play(st, false); toast('Tuning to ' + st[0]); } }
+  });
   // ---------- genre sidebar ----------
   const fams = [...new Set(G.map(g => g.family))];
   function buildGenres(q) {

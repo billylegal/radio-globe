@@ -10,7 +10,7 @@
 <link rel="icon" href="assets/icon/radio-globe.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="assets/icon/radio-globe-512.png">
 <title>Radio Globe</title>
-<link rel="stylesheet" href="style.css?v=1791898636">
+<link rel="stylesheet" href="style.css?v=1791898922">
 </head>
 <body>
 <div id="globe"></div>
@@ -42,6 +42,7 @@
   <button id="livebtn" title="Everything live right now"><i class="ldot"></i> LIVE NOW <span id="livecount"></span></button>
   <button id="rotate" title="Toggle auto-rotate">Spin</button>
   <button id="spaceBtn" title="Ghost: hide the globe, show only the station dots">👻 Ghost</button>
+  <button id="songsTop" title="Songs you saved from radio stations">🎵 Songs <span id="songsN">0</span></button>
   <button id="favtop" title="Your favorites">★ Favorites <span id="favtopn">0</span></button>
 </div>
 <div id="themepop" class="hidden"><h4>Theme color</h4><div class="sw" id="themesw"></div></div>
@@ -62,14 +63,20 @@
 
 <footer id="player">
   <div id="plogo"></div>
-  <div class="info"><div id="pname">Pick a glowing dot on the globe</div><div id="pmeta">Rotate, zoom, choose a genre</div></div>
+  <div class="info"><div id="pname">Pick a glowing dot on the globe</div><div id="pmeta">Rotate, zoom, choose a genre</div><div id="pnow"></div></div>
   <button id="favBtn" class="sbtn" disabled title="Favorite this station">☆</button>
+  <button id="saveSong" class="sbtn" title="Save the song that is playing"><span>🎵</span></button>
   <button id="shareBtn" class="sbtn" disabled title="Share this station"><svg class="shic" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="2.7"/><circle cx="6" cy="12" r="2.7"/><circle cx="18" cy="19" r="2.7"/><path d="M8.4 10.7l7.2-4.1M8.4 13.3l7.2 4.1"/></svg></button>
   <button id="randomBar" class="sbtn" title="Random station (N)">🎲</button>
   <button id="pplay" disabled>▶</button>
   <span id="volIco" aria-hidden="true">🔊</span>
   <input id="vol" type="range" min="0" max="1" step="0.01" value="0.8" title="Volume">
 </footer>
+
+<section id="songs" class="hidden">
+  <header><div class="ft">🎵 My Songs <span id="songsCount">0</span></div><div class="sbar"><button id="songsCopy" title="Copy the list">Copy</button><button id="songsDl" title="Download as CSV">CSV</button><button id="songsClose" title="Close">✕</button></div></header>
+  <div id="songsList"></div>
+</section>
 
 <div id="attr">Imagery © Esri, Maxar, Earthstar Geographics · NASA Blue Marble · Stations: radio-browser.info, Wikidata · Cities: GeoNames</div>
 <div id="ytbox" aria-hidden="true"><div id="ytplayer"></div></div>
@@ -87,7 +94,7 @@
 
 <script src="vendor/globe.gl.min.js"></script>
 <script src="vendor/hls.min.js"></script>
-<script src="app.js?v=1791898636"></script>
+<script src="app.js?v=1791898922"></script>
 <div class="sh"><div class="shx"><a class="shy" href="https://omarchystore.com" target="_blank" rel="noopener" title="Omarchy Store" aria-label="Omarchy Store"><img src="assets/omarchy-store.png" alt="" width="96" height="69"></a></div></div>
 </body>
 </html>
