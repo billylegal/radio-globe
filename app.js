@@ -689,6 +689,35 @@
   const isUP = s => s && typeof s[1] === 'string' && s[1].startsWith('web:');
 
   // the BEATS head floats around the screen all the time; tap it to visit billylegal.com
+  // ---------- Omarchy Store shuttle: orbits the Earth (tilted ellipse), passes in front, then disappears behind the globe ----------
+  {
+    const box = document.querySelector('.sh .shx'), link = box && box.querySelector('.shy');
+    if (box && link) {
+      box.style.cssText += ';animation:none!important;transform-origin:50% 50%;will-change:transform,opacity'; link.style.animation = 'none';
+      let th = 4.2, last = performance.now(), hov = false; const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      link.addEventListener('pointerenter', () => { hov = true; }); link.addEventListener('pointerleave', () => { hov = false; });
+      const TILT = -0.26, SIDE = Math.min(innerWidth, innerHeight) < 600;
+      const tick = now => {
+        requestAnimationFrame(tick);
+        const dt = Math.min(0.1, (now - last) / 1000); last = now;
+        if (roloOn || document.hidden) { box.style.display = 'none'; return; } box.style.display = '';
+        if (!hov && !still) th += dt * (Math.PI * 2 / 52);   // one lap about every 52 s
+        const cam = globe.camera().position, L = Math.hypot(cam.x, cam.y, cam.z), sa = Math.min(0.999, GR / L);
+        const Rs = Math.tan(Math.asin(sa)) / Math.tan(globe.camera().fov * Math.PI / 360) * (innerHeight / 2);   // the Earth's radius on screen
+        const A = Math.min(Rs * (SIDE ? 1.2 : 1.28), innerWidth * 0.46), B = A * 0.3, c = Math.cos(th), s = Math.sin(th);
+        let x = A * c, y = B * s; const ct = Math.cos(TILT), st = Math.sin(TILT);
+        const px = innerWidth / 2 + x * ct - y * st, py = innerHeight / 2 + x * st + y * ct;
+        const z = s;   // > 0 : in front of the Earth (moving left, nose first), < 0 : behind it
+        const base = SIDE ? 74 : 92, w = base * (0.86 + 0.16 * z), h = w * 0.72;
+        const d = Math.hypot(px - innerWidth / 2, py - innerHeight / 2);
+        let op = 1; if (z < 0 && !spaced) op = Math.max(0, Math.min(1, (d - Rs * 0.97) / (w * 0.45)));   // tucks behind the Earth's edge
+        box.style.opacity = op.toFixed(3); link.style.pointerEvents = op > 0.5 ? 'auto' : 'none';
+        box.style.filter = z < 0 ? 'brightness(.78)' : '';
+        box.style.transform = 'translate(' + (px - w / 2).toFixed(1) + 'px,' + (py - h / 2).toFixed(1) + 'px) scale(' + (w / 96).toFixed(3) + ')';
+      };
+      requestAnimationFrame(tick);
+    }
+  }
   const bhead = document.createElement('div'); bhead.id = 'bounceHead'; bhead.setAttribute('aria-hidden', 'true');
   bhead.innerHTML = '<div class="bhx"><a class="bhy" href="https://billylegal.com" target="_blank" rel="noopener" title="Billy Legal" aria-label="Billy Legal"><img src="assets/head.png" alt="" width="62" height="87"></a></div>'; document.body.appendChild(bhead);
   const showHead = on => bhead.classList.toggle('on', !!on);
