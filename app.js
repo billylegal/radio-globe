@@ -23,7 +23,7 @@
 
   // ---------- state ----------
   const BAND = ['Online', 'FM', 'AM', 'Shortwave', 'DAB'];
-  let lyricsOnly = false; const lyricSet = new Map(); let lyricStamp = 0;   // uuid -> title of the song with lyrics it is playing right now
+  let lyricsOnly = false; const lyricSet = new Map(), lyricSince = new Map(); let lyricStamp = 0;   // uuid -> title of the song with lyrics it is playing right now
   let band = -1, playableOnly = false;   // band -1 = every band
   let filter = { kind: 'all' };           // all | genre | family
   let shown = S;                          // currently filtered stations
@@ -67,7 +67,7 @@
   async function loadLyricStations() {
     try {
       const d = await (await fetch('data/lyric_stations.json?t=' + Date.now())).json(); if (!d.updated || d.updated === lyricStamp) return; lyricStamp = d.updated;
-      lyricSet.clear(); for (const r of d.items || []) lyricSet.set(r.u, r.title);
+      lyricSet.clear(); lyricSince.clear(); for (const r of d.items || []) { lyricSet.set(r.u, r.title); if (r.since) lyricSince.set(r.u, { title: r.title, since: r.since, err: r.err }); }
       const lb = $('lyrbtn'); if (lb) lb.querySelector('small').textContent = lyricSet.size ? lyricSet.size + ' now' : '…'; if (lyricsOnly) applyFilter();
     } catch (e) {}
   }
@@ -461,14 +461,20 @@
   async function lyricsFor(title) {
     title = (title || '').trim(); if (title === lyr.key) return;
     const joined = !lyr.key;   // first title after tuning in = joined mid-song (position unknown); a later change = a song just started
-    lyr.key = title; lyr.data = null; lyr.t0 = joined ? null : performance.now(); lyr.adj = joined ? 0 : lyr.adj; lyr.idx = -1; const my = ++lyr.tok; lyr.looking = !!title; if (!title) { lyrBox.classList.add('hidden'); return; }
+    lyr.key = title; lyr.data = null; lyr.idx = -1; lyr.how = '';
+    if (!joined) { lyr.t0 = ((lyr.prevSeen || performance.now()) + performance.now()) / 2; lyr.how = 'live'; }   // we watched the title change: it started between our last two looks
+    else { lyr.t0 = null; lyr.adj = 0; const k = current && lyricSince.get(current[13]), same = (x, y) => { x = fold(x); y = fold(y); return x === y || x.includes(y) || y.includes(x); };
+      if (k && k.since && (k.err == null || k.err <= 25) && same(k.title, title)) { lyr.t0 = performance.now() - (Date.now() / 1000 - k.since) * 1000; lyr.how = 'station'; } }   // joined mid-song: the collector saw when it started
+    const my = ++lyr.tok; lyr.looking = !!title; if (!title) { lyrBox.classList.add('hidden'); return; }
     if (lyr.cache.has(title)) { lyr.data = lyr.cache.get(title); lyr.looking = false; return; }
     const d = await fetchLyrics(title); lyr.cache.set(title, d); if (lyr.cache.size > 80) lyr.cache.delete(lyr.cache.keys().next().value);
     if (my === lyr.tok) { lyr.data = d; lyr.looking = false; }
   }
   function lyrPos() {   // seconds into the song, or null if we cannot tell yet
     if (ytOn && yt && yt.getCurrentTime) { try { return yt.getCurrentTime() + lyr.adj; } catch (e) {} }
-    return lyr.t0 == null ? null : (performance.now() - lyr.t0) / 1000 + lyr.adj;
+    if (lyr.t0 == null) return null;
+    let lag = 0; try { if (audio.buffered.length) lag = Math.max(0, Math.min(20, audio.buffered.end(audio.buffered.length - 1) - audio.currentTime)); } catch (e) {}   // the browser plays a little behind the live edge
+    return (performance.now() - lyr.t0) / 1000 - lag + lyr.adj;
   }
   function paintLyrics() {
     const d = lyr.data; $('lyT').textContent = d.t; $('lyA').textContent = d.a; lyr.idx = -1;
@@ -495,8 +501,9 @@
       const d = lyr.data, hint = $('lyH');
       if (!d.sync) { hint.textContent = 'No timing for this song · words only'; return; }
       const p = lyrPos();
-      if (p == null) { hint.textContent = 'Tap the line you are hearing to sync'; return; }
-      hint.textContent = 'Following the song · tap a line to re-sync' + (lyr.adj ? ' · ' + (lyr.adj > 0 ? '+' : '') + lyr.adj.toFixed(1) + 's' : '');
+      hint.classList.toggle('need', p == null);
+      if (p == null) { hint.textContent = '👆 Tap the line you are hearing and it will follow'; return; }
+      hint.textContent = (lyr.how === 'station' ? 'Following · timed from the station' : 'Following the song') + ' · tap a line to re-sync' + (lyr.adj ? ' · ' + (lyr.adj > 0 ? '+' : '') + lyr.adj.toFixed(1) + 's' : '');
       let i = -1; for (let k = 0; k < d.sync.length; k++) { if (d.sync[k].t <= p + 0.15) i = k; else break; }
       if (i !== lyr.idx) {
         const rows = $('lyB').children; if (rows[lyr.idx]) rows[lyr.idx].classList.remove('on'); lyr.idx = i;
@@ -1405,7 +1412,7 @@
     } catch (e) { return null; }
   }
   const cleanTitle = (t, s) => { t = (t || '').replace(/\s+/g, ' ').replace(/^[-–\s]+|[-–\s]+$/g, ''); return t.length < 3 || t.toLowerCase() === s[0].toLowerCase() ? '' : t; };
-  function npSet(t) { np.title = t || ''; $('pnow').textContent = np.title ? '♪ ' + np.title : ''; $('saveSong').classList.toggle('ready', !!np.title); try { audio.dispatchEvent(new Event('npchange')); } catch (e) {} try { lyricsFor(np.title); } catch (e) {} }
+  function npSet(t) { const ts = performance.now(); if ((t || '') !== np.title) lyr.prevSeen = lyr.seenAt || ts; lyr.seenAt = ts; np.title = t || ''; $('pnow').textContent = np.title ? '♪ ' + np.title : ''; $('saveSong').classList.toggle('ready', !!np.title); try { audio.dispatchEvent(new Event('npchange')); } catch (e) {} try { lyricsFor(np.title); } catch (e) {} }
   async function npPoll() {
     const s = current;
     if (s && (isUP(s) || isBL(s))) {   // YouTube-based radios know their own song
