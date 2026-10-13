@@ -408,6 +408,7 @@
   $('plist').addEventListener('scroll', () => { const p = $('plist'); if (!liveOpen && p.scrollTop + p.clientHeight > p.scrollHeight - 500) panelMore(); }, { passive: true });
   function openPanel(list, title, sub) {
     liveOpen = false; panelList = list; panelDone = 0;
+    $('panel').classList.toggle('single', list.length === 1);
     $('ptitle').textContent = title; $('psub').textContent = sub;
     $('plist').innerHTML = ''; $('plist').scrollTop = 0; panelMore(); $('panel').classList.remove('hidden');
     if (panelList.length > panelDone) setTimeout(() => { const p = $('plist'); while (p.scrollHeight <= p.clientHeight + 100 && panelDone < panelList.length) panelMore(); }, 0);

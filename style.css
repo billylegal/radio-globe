@@ -253,3 +253,11 @@ button,input,select,label{touch-action:manipulation}
 /* LIVE NOW hidden for now (feature kept in code) */
 #livebtn{display:none!important}
 #randomBar{flex:none}
+
+/* phones: tapping one station shows its full info card (no cramped detail + duplicate list row) */
+@media(max-width:820px){
+  #panel.single{max-height:70vh;max-height:70dvh}
+  #panel.single #pdetail{max-height:none;flex:1;min-height:0;border-bottom:0;-webkit-overflow-scrolling:touch}
+  #panel.single #plist{display:none}
+  #panel.single header{padding:10px 14px}
+}
