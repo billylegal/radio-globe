@@ -23,6 +23,7 @@
 
   // ---------- state ----------
   const BAND = ['Online', 'FM', 'AM', 'Shortwave', 'DAB'];
+  let lyricsOnly = false; const lyricSet = new Map(); let lyricStamp = 0;   // uuid -> title of the song with lyrics it is playing right now
   let band = -1, playableOnly = false;   // band -1 = every band
   let filter = { kind: 'all' };           // all | genre | family
   let shown = S;                          // currently filtered stations
@@ -36,12 +37,13 @@
     else if (filter.kind === 'genre') base = S.filter(s => s[11].includes(filter.id));
     else if (filter.kind === 'set') base = S.filter(SETS[filter.key].test);
     else { const ids = new Set(G.filter(g => g.family === filter.fam).map(g => g.id)); base = S.filter(s => s[11].some(i => ids.has(i))); }
+    if (lyricsOnly) base = base.filter(s => lyricSet.has(s[13]));
     bandCounts = [0, 0, 0, 0, 0]; for (const s of base) if (!playableOnly || s[1]) bandCounts[s[14]]++;
     shown = base.filter(s => (band < 0 || s[14] === band) && (!playableOnly || s[1]) && (!favOnly || favs.has(s[13])));
     paintBands(); paintFavs();
     const label = filter.kind === 'all' ? 'All genres' : filter.kind === 'genre' ? G[filter.id].name : filter.kind === 'set' ? SETS[filter.key].label.replace(/^\S+\s/, '') : filter.fam;
     $('favonly').checked = favOnly;
-    $('stat').textContent = label + (band >= 0 ? ' · ' + BAND[band] : '') + ' · ' + shown.length.toLocaleString() + ' stations';
+    $('stat').textContent = label + (lyricsOnly ? ' · with lyrics' : '') + (band >= 0 ? ' · ' + BAND[band] : '') + ' · ' + shown.length.toLocaleString() + ' stations';
     history.replaceState(null, '', filter.kind === 'all' ? location.pathname : '#' + encodeURIComponent(filter.kind === 'genre' ? G[filter.id].name : filter.kind === 'set' ? filter.key : filter.fam));
     refreshPoints();
     document.querySelectorAll('.chip,.allbtn').forEach(e => e.classList.remove('on'));
@@ -60,6 +62,16 @@
   }
   bandsEl.addEventListener('click', e => { const c = e.target.closest('.chip'); if (!c) return; if (c.dataset.b === 'fav') { toggleDrawer(); return; } band = +c.dataset.b; applyFilter(); });
   $('playable').addEventListener('change', e => { playableOnly = e.target.checked; applyFilter(); });
+  // "only stations playing songs with lyrics": the list is built on the PC every few minutes (song titles -> LRCLIB) and published with the site
+  async function loadLyricStations() {
+    try {
+      const d = await (await fetch('data/lyric_stations.json?t=' + Date.now())).json(); if (!d.updated || d.updated === lyricStamp) return; lyricStamp = d.updated;
+      lyricSet.clear(); for (const r of d.items || []) lyricSet.set(r.u, r.title);
+      $('lyrN').textContent = lyricSet.size ? '(' + lyricSet.size + ' right now)' : ''; if (lyricsOnly) applyFilter();
+    } catch (e) {}
+  }
+  $('lyricsOnly').addEventListener('change', e => { lyricsOnly = e.target.checked; applyFilter(); if (lyricsOnly) { if (!lyricSet.size) toast('Looking for stations with lyrics…'); showGenreList('Stations with lyrics'); } });
+  loadLyricStations(); setInterval(loadLyricStations, 60000);
   function stationColor(s) { return s[11].length ? FAMCOL[famOf[s[11][0]]] || NOGENRE : NOGENRE; }
   function cluster(altitude) {
     const cell = Math.max(0.0015, Math.pow(altitude, 1.4) * 0.3);
@@ -296,7 +308,7 @@
     for (const o of scr) { if (!o.c.list.length) continue; const d = Math.hypot(o.x - x, o.y - y) - o.r; if (d < bd) { bd = d; best = o; } }
     return best ? { c: best.c, d: Math.max(0, bd), x: best.x, y: best.y } : null;
   }
-  function tipFor(c) { return '<b>' + (c.n > 1 ? c.n + ' stations' : esc(c.list[0][0]) + (c.list[0][15] ? ' · ' + esc(c.list[0][15]) : '')) + '</b><span>' + (c.n > 1 ? esc(c.list.slice(0, 3).map(s => s[0]).join(' · ')) + (c.n > 3 ? ' …' : '') : esc(c.list[0][12] || '')) + '</span>'; }
+  function tipFor(c) { return '<b>' + (c.n > 1 ? c.n + ' stations' : esc(c.list[0][0]) + (c.list[0][15] ? ' · ' + esc(c.list[0][15]) : '')) + '</b><span>' + (c.n > 1 ? esc(c.list.slice(0, 3).map(s => s[0]).join(' · ')) + (c.n > 3 ? ' …' : '') : esc(lyricsOnly && lyricSet.has(c.list[0][13]) ? '♪ ' + lyricSet.get(c.list[0][13]) : (c.list[0][12] || ''))) + '</span>'; }
   let camSpeed = 0, spPos = null, spT = 0, tipKey = null, tipSince = 0;   // the centre tooltip stays up ~3 s, then goes (touch the scope to bring it back)
   function placeTip() {   // label sits centred ABOVE the scope so it never covers the thing you tap
     tip.style.maxWidth = Math.min(300, innerWidth - 24) + 'px';
@@ -694,7 +706,7 @@
   function rowHTML(s, i) {
     const g = s[11].slice(0, 3).map(x => G[x].name).join(', ');
     const fav = logo(s, 'ph');
-    const meta = [s[15], s[12], g, s[1] ? s[6] && s[6] + (s[7] ? ' ' + s[7] + 'k' : '') : 'broadcast only · no stream'];
+    const meta = [lyricsOnly && lyricSet.has(s[13]) ? '♪ ' + lyricSet.get(s[13]) : '', s[15], s[12], g, s[1] ? s[6] && s[6] + (s[7] ? ' ' + s[7] + 'k' : '') : 'broadcast only · no stream'];
     return '<div class="row' + (current && current[13] === s[13] ? ' now' : '') + '" data-i="' + i + '">' + fav + '<div class="t"><div class="n">' + esc(s[0]) + '</div><div class="m">' + esc(meta.filter(Boolean).join(' · ')) + '</div></div><button class="star' + (favs.has(s[13]) ? ' on' : '') + '" data-u="' + esc(s[13]) + '" title="Favorite">' + (favs.has(s[13]) ? '★' : '☆') + '</button></div>';
   }
   let panelList = [];
