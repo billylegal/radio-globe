@@ -798,6 +798,80 @@
   });
   document.addEventListener('click', e => { if (!e.target.closest('#searchwrap') && !e.target.closest('#gsearch')) $('sresults').classList.add('hidden'); });
 
+
+  // ---------- Rolodex view: every station as a logo card on a flick-able 3D wheel, with an A-Z bar ----------
+  const rolo = (() => {
+    const el = document.createElement('div'); el.id = 'rolo'; el.className = 'hidden';
+    el.innerHTML = '<div id="roloHead"><b>Rolodex</b><span id="roloCnt"></span></div><div id="roloStage"></div><div id="roloScroll"><div id="roloSpacer"></div></div><div id="roloAz"></div><div id="roloBubble"></div>';
+    document.body.appendChild(el);
+    const sc = $('roloScroll'), stage = $('roloStage'), sp = $('roloSpacer'), az = $('roloAz'), bub = $('roloBubble');
+    const LET = '#ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+    az.innerHTML = LET.map(l => '<span data-l="' + l + '">' + l + '</span>').join('');
+    let src = null, list = [], starts = {}, keyL = [], pool = new Map(), H = 78, VH = 400, snapT = 0, snapping = false, open = false;
+    const letterOf = k => { const c = k.charAt(0); return c >= 'a' && c <= 'z' ? c.toUpperCase() : '#'; };
+    function build() {
+      if (src === shown) return; src = shown;
+      const keys = new Map(); for (const s of shown) keys.set(s, fold(s[0]));
+      list = shown.slice().sort((x, y) => { const a = keys.get(x), b = keys.get(y), la = letterOf(a), lb = letterOf(b); return la === lb ? (a < b ? -1 : a > b ? 1 : 0) : la === '#' ? -1 : lb === '#' ? 1 : la < lb ? -1 : 1; });
+      starts = {}; keyL = list.map(s => letterOf(keys.get(s))); keyL.forEach((l, i) => { if (!(l in starts)) starts[l] = i; });
+      az.querySelectorAll('span').forEach(e => e.classList.toggle('off', !(e.dataset.l in starts)));
+      $('roloCnt').textContent = list.length.toLocaleString() + ' stations · A–Z';
+      pool.forEach(e => e.remove()); pool.clear();
+      sp.style.height = Math.max(1, list.length * H + VH - H) + 'px';
+    }
+    function mk(i) {
+      const s = list[i], d = document.createElement('div'); d.className = 'rc';
+      d.innerHTML = '<div class="rlogo">' + logo(s, 'rl') + '</div><div class="rt"><div class="rn">' + esc(s[0]) + '</div><div class="rm">' + esc([s[12], (s[11] || []).slice(0, 2).map(g => G[g].name).join(', '), s[1] ? '' : 'no stream'].filter(Boolean).join(' · ')) + '</div></div><div class="rp">▶</div>';
+      return d;
+    }
+    function render() {
+      if (!open || !list.length) return;
+      const top = sc.scrollTop, c = top / H, lo = Math.max(0, Math.floor(c - VH / H / 2) - 3), hi = Math.min(list.length - 1, Math.ceil(c + VH / H / 2) + 3);
+      pool.forEach((e, i) => { if (i < lo || i > hi) { e.remove(); pool.delete(i); } });
+      for (let i = lo; i <= hi; i++) {
+        let e = pool.get(i); if (!e) { e = mk(i); stage.appendChild(e); pool.set(i, e); }
+        const d = i - c, ad = Math.min(Math.abs(d), 4);
+        e.style.transform = 'translateY(' + (VH / 2 + d * H - H / 2) + 'px) translateZ(' + (-ad * 40) + 'px) rotateX(' + (Math.max(-3.5, Math.min(3.5, d)) * -12) + 'deg)';
+        e.style.opacity = Math.max(0.12, 1 - ad * 0.2);
+        e.classList.toggle('mid', Math.abs(d) < 0.5); e.classList.toggle('now', list[i] === current);
+      }
+      const l = keyL[Math.max(0, Math.min(list.length - 1, Math.round(c)))];
+      az.querySelectorAll('span.on').forEach(e => e.classList.remove('on')); const t = az.querySelector('[data-l="' + l + '"]'); if (t) t.classList.add('on');
+    }
+    function size() { H = innerWidth <= 820 ? 72 : 80; VH = sc.clientHeight || 400; sp.style.height = Math.max(1, list.length * H + VH - H) + 'px'; }
+    const goTo = (i, smooth) => { i = Math.max(0, Math.min(list.length - 1, i)); snapping = true; sc.scrollTo({ top: i * H, behavior: smooth ? 'smooth' : 'auto' }); setTimeout(() => snapping = false, smooth ? 400 : 30); };
+    sc.addEventListener('scroll', () => {
+      render(); if (snapping) return; clearTimeout(snapT);
+      snapT = setTimeout(() => { const i = Math.round(sc.scrollTop / H); if (Math.abs(sc.scrollTop - i * H) > 2) goTo(i, true); }, 140);
+    }, { passive: true });
+    sc.addEventListener('click', e => {
+      const y = e.clientY - sc.getBoundingClientRect().top, i = Math.round(sc.scrollTop / H + (y - VH / 2) / H);
+      if (i < 0 || i >= list.length) return;
+      const s = list[i]; randomMode = false; play(s, false); goTo(i, true); render();
+    });
+    const jump = e => {
+      const r = az.getBoundingClientRect(), k = Math.max(0, Math.min(LET.length - 1, Math.floor((e.clientY - r.top) / r.height * LET.length)));
+      let l = LET[k]; if (!(l in starts)) { for (let j = k; j < LET.length; j++) if (LET[j] in starts) { l = LET[j]; break; } }
+      if (!(l in starts)) return; bub.textContent = l; bub.classList.add('on'); goTo(starts[l], false);
+    };
+    az.addEventListener('pointerdown', e => { az.setPointerCapture(e.pointerId); jump(e); e.preventDefault(); });
+    az.addEventListener('pointermove', e => { if (az.hasPointerCapture(e.pointerId)) jump(e); });
+    az.addEventListener('pointerup', () => { bub.classList.remove('on'); });
+    az.addEventListener('pointercancel', () => { bub.classList.remove('on'); });
+    addEventListener('resize', () => { if (open) { size(); render(); } });
+    audio.addEventListener('playing', () => render());
+    function toggle(on) {
+      open = on === undefined ? !open : on;
+      el.classList.toggle('hidden', !open); $('roloBtn').classList.toggle('on', open); document.body.classList.toggle('rolo-on', open);
+      if (!open) return;
+      $('panel').classList.add('hidden'); build(); size(); sp.style.height = Math.max(1, list.length * H + VH - H) + 'px';
+      const i = current ? list.indexOf(current) : -1; goTo(i >= 0 ? i : 0, false); render();
+    }
+    $('roloBtn').onclick = () => toggle();
+    addEventListener('keydown', e => { if (!open || /INPUT/.test(document.activeElement.tagName)) return; if (e.key === 'Escape') toggle(false); if (e.key === 'ArrowDown') { goTo(Math.round(sc.scrollTop / H) + 1, true); e.preventDefault(); } if (e.key === 'ArrowUp') { goTo(Math.round(sc.scrollTop / H) - 1, true); e.preventDefault(); } if (e.key === 'Enter') { const s = list[Math.round(sc.scrollTop / H)]; if (s) play(s, false); } });
+    return { refresh() { if (open) { src = null; build(); size(); goTo(0, false); render(); } else src = null; }, toggle };
+  })();
+  { const af = applyFilter; applyFilter = function () { af.apply(this, arguments); rolo.refresh(); }; }
   // ---------- genre sidebar ----------
   const fams = [...new Set(G.map(g => g.family))];
   function buildGenres(q) {

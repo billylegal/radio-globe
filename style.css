@@ -273,3 +273,27 @@ button,input,select,label{touch-action:manipulation}
 /* Spin button hidden for now (code kept) */
 #rotate{display:none!important}
 @media(max-width:820px){#panel.single{max-height:78vh;max-height:78dvh}}
+
+/* ---- Rolodex view ---- */
+#roloBtn.on{border-color:var(--acc)!important;color:var(--acc)}
+#rolo{position:fixed;left:0;right:0;top:58px;bottom:96px;z-index:5;background:rgba(5,9,16,.82);backdrop-filter:blur(6px);display:flex;flex-direction:column}
+#rolo.hidden{display:none}
+#roloHead{flex:none;text-align:center;padding:8px 0 0;font-size:13px;color:var(--dim)}#roloHead b{color:var(--acc);margin-right:8px;letter-spacing:.08em;text-transform:uppercase}
+#roloStage{position:absolute;inset:34px 0 0 0;perspective:620px;perspective-origin:50% 50%;overflow:hidden;pointer-events:none}
+#roloScroll{position:absolute;inset:34px 0 0 0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;scrollbar-width:none;touch-action:pan-y;cursor:pointer}
+#roloScroll::-webkit-scrollbar{display:none}
+#roloSpacer{width:1px}
+.rc{position:absolute;left:50%;top:0;width:min(520px,calc(100vw - 92px));margin-left:calc(min(520px,calc(100vw - 92px)) / -2);height:68px;display:flex;align-items:center;gap:14px;padding:0 14px;border-radius:16px;background:var(--glass-solid,rgba(14,22,38,.96));border:1px solid var(--line);box-shadow:0 8px 24px rgba(0,0,0,.45);will-change:transform;backface-visibility:hidden}
+.rc.mid{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc),0 10px 30px rgba(0,0,0,.55)}
+.rc.now .rn{color:var(--acc)}
+.rlogo{width:48px;height:48px;flex:none;border-radius:10px;overflow:hidden;display:grid;place-items:center}
+.rlogo img,.rlogo .rl{width:48px;height:48px;border-radius:10px;object-fit:cover;background:rgba(255,255,255,.08)}
+.rt{flex:1;min-width:0}.rn{font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rm{font-size:12px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.rp{color:var(--acc);font-size:15px;flex:none;opacity:.8}
+#roloAz{position:absolute;right:6px;top:40px;bottom:6px;width:30px;display:flex;flex-direction:column;justify-content:space-between;align-items:center;padding:4px 0;background:rgba(255,255,255,.06);border-radius:15px;touch-action:none;user-select:none;z-index:2}
+#roloAz span{font:700 11px system-ui;color:var(--dim);line-height:1;flex:1;display:grid;place-items:center;width:100%}
+#roloAz span.on{color:var(--acc-ink,#000);background:var(--acc);border-radius:50%;max-height:22px;max-width:22px;flex:none;height:22px;margin:-2px 0}
+#roloAz span.off{opacity:.25}
+#roloBubble{position:absolute;right:52px;top:50%;transform:translateY(-50%);width:76px;height:76px;border-radius:18px;background:var(--acc);color:var(--acc-ink,#000);font:800 44px system-ui;display:none;place-items:center;z-index:3}
+#roloBubble.on{display:grid}
+@media(max-width:820px){#rolo{top:108px;bottom:calc(86px + env(safe-area-inset-bottom))}.rc{height:62px}.rlogo,.rlogo img,.rlogo .rl{width:44px;height:44px}#roloAz span{font-size:10px}}
