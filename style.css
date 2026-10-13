@@ -311,3 +311,7 @@ button,input,select,label{touch-action:manipulation}
 /* phones: close button for the Genres drawer, beside Theme */
 #sideClose{display:none}
 @media(max-width:820px){#sideClose{display:grid;place-items:center;flex:none;width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:var(--glass-solid,rgba(255,255,255,.08));color:var(--txt);font-size:16px;cursor:pointer}.brand #themeBtn{margin-left:auto}}
+
+#roloHead{display:flex;justify-content:center;align-items:center;gap:8px;flex-wrap:nowrap;padding:6px 44px 0 8px;white-space:nowrap}#roloCnt{overflow:hidden;text-overflow:ellipsis;min-width:0}
+#roloClear{background:var(--acc);color:var(--acc-ink,#000);border:0;border-radius:999px;padding:3px 10px;font:700 12px system-ui;cursor:pointer}
+#roloClear.hidden{display:none}

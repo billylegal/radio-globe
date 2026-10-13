@@ -415,6 +415,7 @@
   }
   // every genre opens its full station list (playable stations first, then most-voted)
   function showGenreList(name) {
+    if (roloOn) return;
     const list = shown.slice().sort((x, y) => (y[1] ? 1 : 0) - (x[1] ? 1 : 0) || y[5] - x[5]);
     openPanel(list, name, list.length.toLocaleString() + ' stations · scroll for more'); $('pdetail').classList.add('hidden');
   }
@@ -753,15 +754,16 @@
   function placeLabel(p) { return p.kind === 'country' ? p.name : p.name + (/^[A-Z]{2}$/.test(p.c[5]) ? ', ' + p.c[5] : '') + ', ' + (ccName[p.cc] || p.cc); }
   function kmBetween(la1, lo1, la2, lo2) { const r = Math.PI / 180, dl = (la2 - la1) * r, dn = (lo2 - lo1) * r, a = Math.sin(dl / 2) ** 2 + Math.cos(la1 * r) * Math.cos(la2 * r) * Math.sin(dn / 2) ** 2; return 12742 * Math.asin(Math.sqrt(a)); }
   function goPlace(p) {
-    $('panel').classList.remove('hidden'); $('pdetail').classList.add('hidden'); ctl.autoRotate = false; autoRotate = false;
+    if (!roloOn) { $('panel').classList.remove('hidden'); $('pdetail').classList.add('hidden'); } ctl.autoRotate = false; autoRotate = false;
+    const showList = (list, title, sub) => roloOn ? rolo.showCustom(list, title) : openPanel(list, title, sub);
     if (p.kind === 'city') {
       const [nm, , la, lo] = p.c; const radius = p.c[6] > 2e6 ? 60 : p.c[6] > 4e5 ? 40 : 25;
       const list = shown.filter(s => Math.abs(s[2] - la) < 1.5 && kmBetween(s[2], s[3], la, lo) <= radius).sort((a, b) => b[5] - a[5]);
-      openPanel(list, 'Stations near ' + nm, placeLabel(p) + ' · within ' + radius + ' km · ' + list.length + ' found');
+      showList(list, 'Stations near ' + nm, placeLabel(p) + ' · within ' + radius + ' km · ' + list.length + ' found');
       globe.pointOfView({ lat: la, lng: lo, altitude: radius > 50 ? 0.3 : 0.2 }, 1500);
     } else {
       const list = shown.filter(s => s[4] === p.cc).sort((a, b) => b[5] - a[5]);
-      openPanel(list, 'Stations in ' + p.name, list.length + ' found' + (filter.kind !== 'all' || band >= 0 || favOnly || playableOnly ? ' with current filters' : ''));
+      showList(list, 'Stations in ' + p.name, list.length + ' found' + (filter.kind !== 'all' || band >= 0 || favOnly || playableOnly ? ' with current filters' : ''));
       const all = S.filter(s => s[4] === p.cc); let la = 0, lo = 0;
       if (all.length) { const m = a => a.sort((x, y) => x - y)[a.length >> 1]; la = m(all.map(s => s[2])); lo = m(all.map(s => s[3])); const sp = Math.max(...all.map(s => Math.abs(s[2] - la)).sort((x, y) => x - y).slice(0, Math.ceil(all.length * .9)).slice(-1), 1); globe.pointOfView({ lat: la, lng: lo, altitude: Math.min(2.2, Math.max(0.35, sp / 14)) }, 1600); }
     }
@@ -796,7 +798,7 @@
     if (r.dataset.g !== undefined) { const g = sres.genres[+r.dataset.g]; filter = { kind: 'genre', id: G.indexOf(g) }; applyFilter(); showGenreList(g.name); return; }
     if (r.dataset.l !== undefined) { liveWatch(sres.live[+r.dataset.l]); return; }
     if (r.dataset.i === undefined) return;
-    const s = sres.stations[+r.dataset.i]; randomMode = false; play(s, true); openPanel([s], s[0], s[12] || '');
+    const s = sres.stations[+r.dataset.i]; randomMode = false; if (roloOn) { rolo.reveal(s); return; } play(s, true); openPanel([s], s[0], s[12] || '');
   });
   document.addEventListener('click', e => { if (!e.target.closest('#searchwrap') && !e.target.closest('#gsearch')) $('sresults').classList.add('hidden'); });
 
@@ -804,20 +806,20 @@
   // ---------- Rolodex view: every station as a logo card on a flick-able 3D wheel, with an A-Z bar ----------
   const rolo = (() => {
     const el = document.createElement('div'); el.id = 'rolo'; el.className = 'hidden';
-    el.innerHTML = '<div id="roloHead"><b>Rolodex</b><span id="roloCnt"></span></div><div id="roloStage"></div><div id="roloScroll"><div id="roloSpacer"></div></div><div id="roloAz"></div><div id="roloBubble"></div>';
+    el.innerHTML = '<div id="roloHead"><b>Rolodex</b><span id="roloCnt"></span><button id="roloClear" class="hidden" title="Show all stations again">✕ Show all</button></div><div id="roloStage"></div><div id="roloScroll"><div id="roloSpacer"></div></div><div id="roloAz"></div><div id="roloBubble"></div>';
     document.body.appendChild(el);
     const sc = $('roloScroll'), stage = $('roloStage'), sp = $('roloSpacer'), az = $('roloAz'), bub = $('roloBubble');
     const LET = '#ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
     az.innerHTML = LET.map(l => '<span data-l="' + l + '">' + l + '</span>').join('');
-    let src = null, list = [], starts = {}, keyL = [], pool = new Map(), H = 78, VH = 400, snapT = 0, snapping = false, open = false;
+    let src = null, custom = null, customLabel = '', list = [], starts = {}, keyL = [], pool = new Map(), H = 78, VH = 400, snapT = 0, snapping = false, open = false;
     const letterOf = k => { const c = k.charAt(0); return c >= 'a' && c <= 'z' ? c.toUpperCase() : '#'; };
     function build() {
-      if (src === shown) return; src = shown;
-      const keys = new Map(); for (const s of shown) keys.set(s, fold(s[0]));
-      list = shown.slice().sort((x, y) => { const a = keys.get(x), b = keys.get(y), la = letterOf(a), lb = letterOf(b); return la === lb ? (a < b ? -1 : a > b ? 1 : 0) : la === '#' ? -1 : lb === '#' ? 1 : la < lb ? -1 : 1; });
+      const base = custom || shown; if (src === base) return; src = base;
+      const keys = new Map(); for (const s of base) keys.set(s, fold(s[0]));
+      list = base.slice().sort((x, y) => { const a = keys.get(x), b = keys.get(y), la = letterOf(a), lb = letterOf(b); return la === lb ? (a < b ? -1 : a > b ? 1 : 0) : la === '#' ? -1 : lb === '#' ? 1 : la < lb ? -1 : 1; });
       starts = {}; keyL = list.map(s => letterOf(keys.get(s))); keyL.forEach((l, i) => { if (!(l in starts)) starts[l] = i; });
       az.querySelectorAll('span').forEach(e => e.classList.toggle('off', !(e.dataset.l in starts)));
-      $('roloCnt').textContent = list.length.toLocaleString() + ' stations · A–Z';
+      $('roloCnt').textContent = (custom ? customLabel + ' · ' : '') + list.length.toLocaleString() + ' stations · A–Z'; $('roloClear').classList.toggle('hidden', !custom);
       pool.forEach(e => e.remove()); pool.clear();
       sp.style.height = Math.max(1, list.length * H + VH - H) + 'px';
     }
@@ -892,7 +894,12 @@
       const step = now => { const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3); sc.scrollTop = from + (to - from) * e; if (k < 1) requestAnimationFrame(step); else { snapping = false; render(); done(); } };
       requestAnimationFrame(step);
     }
-    return { spinTo, isOpen: () => open, refresh() { if (open) { src = null; build(); size(); goTo(0, false); render(); } else src = null; }, toggle };
+    $('roloClear').onclick = () => { custom = null; src = null; build(); size(); goTo(0, false); render(); };
+    // show only a set of stations (a searched city / country) in the wheel, A-Z
+    function showCustom(l, label) { custom = l; customLabel = label; src = null; build(); size(); sp.style.height = Math.max(1, list.length * H + VH - H) + 'px'; goTo(0, false); render(); }
+    // search result for one station: bring it to the front of the wheel and play it (no info card until it's touched)
+    function reveal(s) { if (list.indexOf(s) < 0) { custom = null; src = null; build(); size(); } spinTo(s, () => play(s, false)); }
+    return { spinTo, showCustom, reveal, isOpen: () => open, refresh() { custom = null; if (open) { src = null; build(); size(); goTo(0, false); render(); } else src = null; }, toggle };
   })();
   { let pref = null; try { pref = localStorage.getItem('rg-rolo'); } catch (e) {} if (pref === '1' || (pref === null && innerWidth <= 820)) rolo.toggle(true); }   // phones start on the Rolodex unless you last left it elsewhere
   { const af = applyFilter; applyFilter = function () { af.apply(this, arguments); rolo.refresh(); }; }
