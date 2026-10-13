@@ -201,7 +201,7 @@
     for (const r of liveItems) {
       if (r.kind !== 'live' || r.ai) continue;
       const q = project(r.lat, r.lng !== undefined ? r.lng : r.lon, 0.0016); if (q.behind || q.vis <= 0) continue;
-      const fade = Math.min(1, q.cosv / 0.12), ph = (nowT * 0.8 + (r.lat * 7)) % 1;
+      const fade = Math.min(1, q.cosv / 0.12), ph = (((nowT * 0.8 + (r.lat * 7)) % 1) + 1) % 1;
       cx.globalAlpha = fade * (1 - ph) * 0.8; cx.strokeStyle = '#ff3b3b'; cx.lineWidth = 1.6; cx.beginPath(); cx.arc(q.x, q.y, 4 + ph * 11, 0, 6.2832); cx.stroke();
       cx.globalAlpha = fade; cx.fillStyle = '#ff3b3b'; cx.strokeStyle = '#fff'; cx.lineWidth = 1.2; cx.beginPath(); cx.arc(q.x, q.y, 3.4, 0, 6.2832); cx.fill(); cx.stroke();
       scr.push({ x: q.x, y: q.y, r: 4, c: { live: r, n: 1, list: [] } });
@@ -220,7 +220,7 @@
         if (lv > 0 || performance.now() - pulseT < 3000) {
           const now = performance.now();
           for (let k = 0; k < 3; k++) {
-            const t = ((now - pulseT) / 1300 + k / 3) % 1;
+            const t = ((((now - pulseT) / 1300 + k / 3) % 1) + 1) % 1;
             cx.strokeStyle = 'rgba(' + REDRGB + ',' + ((1 - t) * (0.3 + 0.6 * lv)) + ')';
             cx.beginPath(); cx.arc(q.x, q.y, 14 + t * (24 + 14 * lv), 0, 6.2832); cx.stroke();
           }
@@ -263,12 +263,120 @@
   let ptr = null, lockedTo = null;
   function pickNear(x, y, rad) { let best = null, bd = rad; for (const d of scr) { const dd = Math.hypot(d.x - x, d.y - y); if (dd < bd) { bd = dd; best = d; } } return best; }
   function updateReticle(rad) {
+    if (centerMode) { bz.style.transform = 'translate(' + (innerWidth / 2 - 56).toFixed(1) + 'px,' + (innerHeight / 2 - 56).toFixed(1) + 'px)'; bz.classList.toggle('lock', !!(autoPick && autoPick.d <= SNAP_R())); return; }
     if (!ptr) return;
     const d = pickNear(ptr[0], ptr[1], rad || 20), x = d ? d.x : ptr[0], y = d ? d.y : ptr[1];
     bz.style.transform = 'translate(' + (x - 56).toFixed(1) + 'px,' + (y - 56).toFixed(1) + 'px)'; bz.classList.toggle('lock', !!d);
   }
   gEl.addEventListener('pointermove', e => { ptr = [e.clientX, e.clientY]; if (!e.buttons) updateReticle(e.pointerType === 'touch' ? 34 : 20); });
   ctl.addEventListener('change', () => { draw(); });
+
+  // ---------- Radio Garden style: scroll the globe and the dot under the centre scope is selected; let go and it settles onto it and plays ----------
+  let centerMode = false, drag = false, dragMoved = false, snapping = false, autoPick = null, snapT = 0, lastPtr = null;
+  const SNAP_R = () => innerWidth <= 820 ? 58 : 46, SEE_R = 150;
+  function centerPick() {
+    const x = innerWidth / 2, y = innerHeight / 2; let best = null, bd = SEE_R;
+    for (const o of scr) { if (!o.c.list.length) continue; const d = Math.hypot(o.x - x, o.y - y) - o.r; if (d < bd) { bd = d; best = o; } }
+    return best ? { c: best.c, d: Math.max(0, bd), x: best.x, y: best.y } : null;
+  }
+  function tipFor(c) { return '<b>' + (c.n > 1 ? c.n + ' stations' : esc(c.list[0][0]) + (c.list[0][15] ? ' · ' + esc(c.list[0][15]) : '')) + '</b><span>' + (c.n > 1 ? esc(c.list.slice(0, 3).map(s => s[0]).join(' · ')) + (c.n > 3 ? ' …' : '') : esc(c.list[0][12] || '')) + '</span>'; }
+  function trackCenter() {   // runs on every camera change while scrolling: highlight what is under the scope
+    if (!centerMode || snapping) return;
+    autoPick = centerPick();
+    const h = autoPick ? autoPick.c : null;
+    if (h !== hover) { hover = h; dirty = true; }
+    if (autoPick && autoPick.d <= SNAP_R()) { tip.innerHTML = tipFor(autoPick.c); tip.style.left = Math.min(innerWidth - 300, innerWidth / 2 + 34) + 'px'; tip.style.top = (innerHeight / 2 + 34) + 'px'; tip.classList.remove('hidden'); }
+    else tip.classList.add('hidden');
+    updateReticle();
+  }
+  function settle() {
+    if (!dragMoved || drag || snapping || roloOn) return;
+    autoPick = centerPick();
+    if (!autoPick || autoPick.d > SNAP_R()) { dragMoved = false; return; }
+    const c = autoPick.c, pov = globe.pointOfView(), s = c.list[0];
+    snapping = true; dragMoved = false; ctl.enableDamping = false; try { ctl.update(); } catch (e) {}   // kill leftover momentum so the glide lands exactly on the dot
+    tip.innerHTML = tipFor(c); tip.classList.remove('hidden');
+    if (current !== s && !c.live && !c.ev) play(s, false);   // start buffering while it glides in
+    const dl = ((((c.lng - pov.lng) % 360) + 540) % 360) - 180;
+    globe.pointOfView({ lat: c.lat, lng: pov.lng + dl, altitude: pov.altitude }, 520);
+    setTimeout(() => { ctl.enableDamping = true; snapping = false; hover = c; dirty = true; updateReticle(); }, 560);
+  }
+  gEl.addEventListener('pointerdown', e => {
+    drag = true; dragMoved = false; lastPtr = [e.clientX, e.clientY];
+    if (snapping) { snapping = false; ctl.enableDamping = true; globe.pointOfView(globe.pointOfView(), 0); }   // grabbing the globe cancels the glide
+  });
+  // --- grab-the-point dragging: the spot of the Earth under your finger/cursor stays under it (like Radio Garden), with a smooth fling when you let go ---
+  ctl.enableRotate = false;   // we rotate; OrbitControls keeps zoom / pinch
+  const GR = 100;
+  function rayHit(px, py) {
+    const cam = globe.camera(), cp = cam.position, L = Math.hypot(cp.x, cp.y, cp.z);
+    const f = [-cp.x / L, -cp.y / L, -cp.z / L];
+    let r = [-f[2], 0, f[0]]; const rl = Math.hypot(r[0], r[1], r[2]) || 1; r = [r[0] / rl, r[1] / rl, r[2] / rl];   // right = f x (0,1,0)
+    const u = [r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]];                       // true up = r x f
+    const th = Math.tan(cam.fov * Math.PI / 360), nx = (px / innerWidth * 2 - 1) * th * (innerWidth / innerHeight), ny = (1 - py / innerHeight * 2) * th;
+    let d = [f[0] + nx * r[0] + ny * u[0], f[1] + nx * r[1] + ny * u[1], f[2] + nx * r[2] + ny * u[2]]; const dl = Math.hypot(d[0], d[1], d[2]); d = [d[0] / dl, d[1] / dl, d[2] / dl];
+    const b = cp.x * d[0] + cp.y * d[1] + cp.z * d[2], disc = b * b - (L * L - GR * GR);
+    if (disc < 0) return null;
+    const t = -b - Math.sqrt(disc); if (t < 0) return null;
+    const x = cp.x + d[0] * t, y = cp.y + d[1] * t, z = cp.z + d[2] * t; return [x / GR, y / GR, z / GR];
+  }
+  function spinCam(ax, ang) {   // rotate the camera about the globe centre (axis unit vector, angle rad)
+    const p = globe.camera().position, c = Math.cos(ang), s = Math.sin(ang), k = ax[0] * p.x + ax[1] * p.y + ax[2] * p.z;
+    const cx_ = ax[1] * p.z - ax[2] * p.y, cy_ = ax[2] * p.x - ax[0] * p.z, cz_ = ax[0] * p.y - ax[1] * p.x;
+    p.set(p.x * c + cx_ * s + ax[0] * k * (1 - c), p.y * c + cy_ * s + ax[1] * k * (1 - c), p.z * c + cz_ * s + ax[2] * k * (1 - c));
+    globe.camera().lookAt(0, 0, 0); ctl.update();
+  }
+  let grab = null, gsamp = [], flingRaf = 0, gptrs = 0;
+  const stopFling = () => { if (flingRaf) { cancelAnimationFrame(flingRaf); flingRaf = 0; } };
+  gEl.addEventListener('pointerdown', e => {
+    gptrs = e.isPrimary ? 1 : gptrs + 1; stopFling(); gsamp = [];
+    if (gptrs > 1) { grab = null; return; }   // pinch: leave it to the zoom control
+    ctl.autoRotate = false; autoRotate = false; $('rotate').style.opacity = .5;
+    grab = rayHit(e.clientX, e.clientY);
+  });
+  addEventListener('pointermove', e => {
+    if (!grab || !drag || gptrs > 1) return;
+    const h = rayHit(e.clientX, e.clientY); if (!h) return;
+    const ax = [h[1] * grab[2] - h[2] * grab[1], h[2] * grab[0] - h[0] * grab[2], h[0] * grab[1] - h[1] * grab[0]], s = Math.hypot(ax[0], ax[1], ax[2]), ang = Math.atan2(s, h[0] * grab[0] + h[1] * grab[1] + h[2] * grab[2]);
+    if (s < 1e-9 || ang < 1e-7) return;
+    const n = [ax[0] / s, ax[1] / s, ax[2] / s]; spinCam(n, ang);
+    const t = performance.now(); gsamp.push({ t, n, ang }); while (gsamp.length && t - gsamp[0].t > 110) gsamp.shift();
+  }, true);
+  const grabEnd = () => {
+    gptrs = Math.max(0, gptrs - 1); if (gptrs) return; grab = null;
+    const t = performance.now(), sm = gsamp.filter(q => t - q.t < 110); gsamp = [];
+    if (sm.length < 2) return;
+    let wx = 0, wy = 0, wz = 0; for (const q of sm) { wx += q.n[0] * q.ang; wy += q.n[1] * q.ang; wz += q.n[2] * q.ang; }
+    const dt = Math.max(30, sm[sm.length - 1].t - sm[0].t + 16) / 1000; let om = [wx / dt, wy / dt, wz / dt];
+    const alt = globe.pointOfView().altitude, pxPerRad = GR * innerHeight / (0.93 * GR * (1 + alt)), maxW = 3200 / pxPerRad;   // cap the fling speed
+    let w = Math.hypot(om[0], om[1], om[2]); if (w > maxW) { om = om.map(v => v * maxW / w); w = maxW; }
+    if (w * pxPerRad < 60) return;
+    let last = performance.now(), cur = w; const dir = om.map(v => v / w);
+    const step = now => {
+      const dt2 = Math.min(0.05, (now - last) / 1000); last = now;
+      cur *= Math.exp(-dt2 / 0.5);   // glide: velocity halves about every 0.35 s
+      spinCam(dir, cur * dt2);
+      if (cur * pxPerRad > 6) flingRaf = requestAnimationFrame(step); else flingRaf = 0;
+    };
+    flingRaf = requestAnimationFrame(step);
+  };
+  addEventListener('pointerup', grabEnd, true); addEventListener('pointercancel', grabEnd, true);
+
+  addEventListener('pointermove', e => {
+    if (drag && !dragMoved && lastPtr && Math.hypot(e.clientX - lastPtr[0], e.clientY - lastPtr[1]) > 5) { dragMoved = true; centerMode = true; tip.classList.add('hidden'); }
+    else if (!drag && centerMode && !snapping && e.pointerType !== 'touch' && lastPtr && Math.hypot(e.clientX - lastPtr[0], e.clientY - lastPtr[1]) > 10) { centerMode = false; hover = null; dirty = true; ptr = [e.clientX, e.clientY]; updateReticle(); }
+  }, true);
+  const dragEnd = e => { if (!drag) return; drag = false; lastCamPos = null; if (e && e.clientX !== undefined) lastPtr = [e.clientX, e.clientY]; clearTimeout(snapT); snapT = setTimeout(settle, 250); };
+  addEventListener('pointerup', dragEnd, true); addEventListener('pointercancel', dragEnd, true); addEventListener('blur', () => dragEnd());
+  let lastCamPos = null, lastCamT = 0;   // "still moving?" = the surface slides faster than ~10 px/s (ignores the long slow damping tail, at any frame rate)
+  ctl.addEventListener('change', () => {
+    trackCenter();
+    if (drag || !dragMoved) return;
+    const cp = globe.camera().position, now = performance.now(), alt = globe.pointOfView().altitude, pxPerUnit = innerHeight / (0.93 * 100 * (1 + alt));
+    const speed = lastCamPos ? cp.distanceTo(lastCamPos) * pxPerUnit / Math.max(0.001, (now - lastCamT) / 1000) : 1e9;
+    lastCamPos = cp.clone(); lastCamT = now;
+    if (speed > 10) { clearTimeout(snapT); snapT = setTimeout(settle, 250); }
+  });
 
   // ---------- Live now: DJ sets streaming right now + tonight's events ----------
   let liveData = { items: [] }, evData = { items: [] }, liveItems = [], evItems = [], liveTab = 'feat', liveOpen = false, watching = null, liveFam = '';
