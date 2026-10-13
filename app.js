@@ -289,13 +289,17 @@
   }
   function tipFor(c) { return '<b>' + (c.n > 1 ? c.n + ' stations' : esc(c.list[0][0]) + (c.list[0][15] ? ' · ' + esc(c.list[0][15]) : '')) + '</b><span>' + (c.n > 1 ? esc(c.list.slice(0, 3).map(s => s[0]).join(' · ')) + (c.n > 3 ? ' …' : '') : esc(c.list[0][12] || '')) + '</span>'; }
   let camSpeed = 0, spPos = null, spT = 0, tipKey = null, tipSince = 0;   // the centre tooltip stays up ~3 s, then goes (touch the scope to bring it back)
+  function placeTip() {   // label sits centred ABOVE the scope so it never covers the thing you tap
+    tip.style.maxWidth = Math.min(300, innerWidth - 24) + 'px';
+    tip.style.left = (innerWidth / 2) + 'px'; tip.style.top = (innerHeight / 2 - 66) + 'px'; tip.style.transform = 'translate(-50%,-100%)'; tip.style.textAlign = 'center';
+  }
   function trackCenter() {   // runs after every render: highlight what is under the scope
     if (!centerMode || snapping) return;
     { const cp = globe.camera().position, now = performance.now(); if (spPos) { const alt = globe.pointOfView().altitude, px = innerHeight / (0.93 * 100 * (1 + alt)); camSpeed = cp.distanceTo(spPos) * px / Math.max(0.001, (now - spT) / 1000); } spPos = cp.clone(); spT = now; }
     autoPick = centerPick();
     const h = autoPick ? autoPick.c : null;
     if (h !== hover) { hover = h; dirty = true; }
-    if (autoPick && autoPick.d <= SNAP_R() && camSpeed < 260 && !(innerWidth <= 820 && !$('panel').classList.contains('hidden')) && ((autoPick.c !== tipKey && (tipKey = autoPick.c, tipSince = performance.now(), true)) || performance.now() - tipSince < 3000)) { tip.innerHTML = tipFor(autoPick.c); tip.style.left = Math.min(innerWidth - 300, innerWidth / 2 + 34) + 'px'; tip.style.top = (innerHeight / 2 + 34) + 'px'; tip.classList.remove('hidden'); }
+    if (autoPick && autoPick.d <= SNAP_R() && camSpeed < 260 && !(innerWidth <= 820 && !$('panel').classList.contains('hidden')) && ((autoPick.c !== tipKey && (tipKey = autoPick.c, tipSince = performance.now(), true)) || performance.now() - tipSince < 3000)) { tip.innerHTML = tipFor(autoPick.c); placeTip(); tip.classList.remove('hidden'); }
     else { tip.classList.add('hidden'); if (!autoPick || autoPick.d > SNAP_R()) tipKey = null; }
     updateReticle();
   }
@@ -305,7 +309,7 @@
     if (!autoPick || autoPick.d > SNAP_R()) { dragMoved = false; return; }
     const c = autoPick.c, pov = globe.pointOfView(), s = c.list[0];
     snapping = true; dragMoved = false; ctl.enableDamping = false; try { ctl.update(); } catch (e) {}   // kill leftover momentum so the glide lands exactly on the dot
-    tip.innerHTML = tipFor(c); tip.classList.remove('hidden'); tipKey = c; tipSince = performance.now();
+    tip.innerHTML = tipFor(c); placeTip(); tip.classList.remove('hidden'); tipKey = c; tipSince = performance.now();
     if (current !== s && !c.live && !c.ev) play(s, false);   // start buffering while it glides in
     const dl = ((((c.lng - pov.lng) % 360) + 540) % 360) - 180;
     globe.pointOfView({ lat: c.lat, lng: pov.lng + dl, altitude: pov.altitude }, 520);
