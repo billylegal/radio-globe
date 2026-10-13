@@ -482,3 +482,5 @@ body.locked #randomBar{opacity:.35}
 #lockBtn:hover,#lockBtn:focus-visible{opacity:1}
 #lockBtn.on{opacity:1}
 @media(max-width:820px){#lockBtn{width:36px;height:36px}}
+#scopepill{position:fixed;left:50%;transform:translateX(-50%);top:calc(60px + env(safe-area-inset-top));z-index:7;background:rgba(10,12,20,.85);color:#fff;border:1px solid var(--acc,#39ff14);border-radius:999px;padding:5px 12px;font:700 12px system-ui,sans-serif;cursor:pointer;max-width:80vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#scopepill.hidden{display:none}

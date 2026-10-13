@@ -27,12 +27,14 @@
   let band = -1, playableOnly = false;   // band -1 = every band
   let filter = { kind: 'all' };           // all | genre | family
   let shown = S;                          // currently filtered stations
+  let scope = null, lastFilter = null;    // scope = {test, label}: a searched country / city; Random stays inside it until you pick a genre, a station or Clear
+  function setScope(sc) { scope = sc; const b = $('scopepill'); if (b) { b.classList.toggle('hidden', !sc); b.textContent = sc ? '📍 ' + sc.label + ' ✕' : ''; } }
   let current = null;                     // playing station
   let autoRotate = true;
   const cellKey = (la, lo, c) => Math.floor((la + 90) / c) + ':' + Math.floor((lo + 180) * Math.max(0.15, Math.cos(la * Math.PI / 180)) / c);
 
   function applyFilter() {
-    let base;   // (Live is its own department: its genre list is separate from this filter)
+    let base; if (filter !== lastFilter) { lastFilter = filter; setScope(null); }   // a new genre / All = back to the whole world   // (Live is its own department: its genre list is separate from this filter)
     if (filter.kind === 'all') base = S;
     else if (filter.kind === 'genre') base = S.filter(s => s[11].includes(filter.id));
     else if (filter.kind === 'set') base = S.filter(SETS[filter.key].test);
@@ -754,7 +756,7 @@
     openPanel(list, name, list.length.toLocaleString() + ' stations · scroll for more'); $('pdetail').classList.add('hidden');
   }
   function starClick(e, list) { const b = e.target.closest('.star'); if (!b) return false; e.stopPropagation(); const s = S.find(x => x[13] === b.dataset.u); if (s) toggleFav(s); return true; }
-  $('plist').addEventListener('click', e => { if (liveOpen) return; if (starClick(e)) return; const r = e.target.closest('.row'); if (r && panelList[+r.dataset.i]) play(panelList[+r.dataset.i], true); });
+  $('plist').addEventListener('click', e => { if (liveOpen) return; if (starClick(e)) return; const r = e.target.closest('.row'); if (r && panelList[+r.dataset.i]) { randomMode = false; play(panelList[+r.dataset.i], true); } });
   $('pclose').onclick = () => $('panel').classList.add('hidden');
 
   // ---------- station details + share ----------
@@ -1050,7 +1052,7 @@
   const prevPlayClick = $('pplay').onclick = () => { if (Date.now() - lastUnmute < 600) return; if (ytOn && yt && yt.getPlayerState) { ytPlaying ? yt.pauseVideo() : yt.playVideo(); return; } if (!current) return; audio.paused ? audio.play().catch(failed) : audio.pause(); };
   function randomStation() {
     if (locked) { lockMsg(); return; } if (!shown.length) return; randomMode = true;
-    const bad = new Set(lsGet('rg-bad')); let pool = shown.filter(x => x[1]); if (!pool.length) return;
+    const bad = new Set(lsGet('rg-bad')); let pool = shown.filter(x => x[1] && (!scope || scope.test(x))); if (!pool.length) { if (scope) toast('No playable stations in ' + scope.label + ' with these filters'); return; }
     const fast = pool.filter(x => fastOK(x) && !bad.has(x[13])); if (fast.length > 20) pool = fast;
     let s, t = 0; do { s = pool[(Math.random() * pool.length) | 0]; } while (s === current && ++t < 5);
     if (roloOn) { rolo.spinTo(s, () => {}); return; }
@@ -1061,6 +1063,7 @@
       globe.pointOfView({ lat: s[2], lng: pov.lng + dl, altitude: pov.altitude > 1.1 ? Math.max(1.0, pov.altitude * 0.85) : pov.altitude }, 1500);
     }
   }
+  $('scopepill').onclick = () => { setScope(null); if (roloOn) $('roloClear').click(); toast('Random is worldwide again'); };
   $('random').onclick = () => { randomMode = true; tries = 0; randomStation(); };
   // tap the station name / logo in the player bar to open or close its info card
   const toggleInfo = () => {
@@ -1205,10 +1208,12 @@
     if (p.kind === 'city') {
       const [nm, , la, lo] = p.c; const radius = p.c[6] > 2e6 ? 60 : p.c[6] > 4e5 ? 40 : 25;
       const list = shown.filter(s => Math.abs(s[2] - la) < 1.5 && kmBetween(s[2], s[3], la, lo) <= radius).sort((a, b) => b[5] - a[5]);
+      setScope({ label: nm, test: s => s[2] != null && Math.abs(s[2] - la) < 1.5 && kmBetween(s[2], s[3], la, lo) <= radius });
       showList(list, 'Stations near ' + nm, placeLabel(p) + ' · within ' + radius + ' km · ' + list.length + ' found');
       globe.pointOfView({ lat: la, lng: lo, altitude: radius > 50 ? 0.3 : 0.2 }, 1500);
     } else {
       const list = shown.filter(s => s[4] === p.cc).sort((a, b) => b[5] - a[5]);
+      setScope({ label: p.name, test: s => s[4] === p.cc });
       showList(list, 'Stations in ' + p.name, list.length + ' found' + (filter.kind !== 'all' || band >= 0 || favOnly || playableOnly ? ' with current filters' : ''));
       const all = S.filter(s => s[4] === p.cc); let la = 0, lo = 0;
       if (all.length) { const m = a => a.sort((x, y) => x - y)[a.length >> 1]; la = m(all.map(s => s[2])); lo = m(all.map(s => s[3])); const sp = Math.max(...all.map(s => Math.abs(s[2] - la)).sort((x, y) => x - y).slice(0, Math.ceil(all.length * .9)).slice(-1), 1); globe.pointOfView({ lat: la, lng: lo, altitude: Math.min(2.2, Math.max(0.35, sp / 14)) }, 1600); }
@@ -1291,7 +1296,7 @@
     if (r.dataset.l !== undefined) { liveWatch(sres.live[+r.dataset.l]); return; }
     if (r.dataset.d !== undefined) { const d = sres.djs[+r.dataset.d]; if (d.live && d.src !== 'tiktok') { liveTab = d.src === 'twitch' ? 'tw' : d.src === 'kick' ? 'kick' : 'yt'; liveWatch(d.live); } else window.open(profileURL(d.src, d.id), '_blank', 'noopener'); return; }
     if (r.dataset.i === undefined) return;
-    const s = sres.stations[+r.dataset.i]; randomMode = false; if (roloOn) { rolo.reveal(s); return; } play(s, true); openPanel([s], s[0], s[12] || '');
+    const s = sres.stations[+r.dataset.i]; randomMode = false; setScope(null); if (roloOn) { rolo.reveal(s); return; } play(s, true); openPanel([s], s[0], s[12] || '');
   });
   document.addEventListener('click', e => { if (!e.target.closest('#searchwrap') && !e.target.closest('#gsearch')) $('sresults').classList.add('hidden'); });
 
@@ -1388,14 +1393,14 @@
       const step = now => { const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3); sc.scrollTop = from + (to - from) * e; if (k < 1) requestAnimationFrame(step); else { snapping = false; render(); done(); } };
       requestAnimationFrame(step);
     }
-    $('roloClear').onclick = () => { custom = null; src = null; build(); size(); goTo(0, false); render(); };
+    $('roloClear').onclick = () => { setScope(null); custom = null; src = null; build(); size(); goTo(0, false); render(); };
     // show only a set of stations (a searched city / country) in the wheel, A-Z
     function showCustom(l, label) { custom = l; customLabel = label; src = null; build(); size(); sp.style.height = Math.max(1, list.length * H + VH - H) + 'px'; goTo(0, false); render(); }
     // search result for one station: bring it to the front of the wheel and play it (no info card until it's touched)
     function reveal(s) { randomMode = false; if (list.indexOf(s) < 0) { custom = null; src = null; build(); size(); } spinTo(s, () => {}); }
     // at launch: wheel starts at the top, then spins down to the opening station and plays it
     function intro() { if (!open || !current) return; build(); const i = list.indexOf(current); if (i < 0) return; sc.scrollTop = 0; render(); spinTo(current, () => { if (audio.paused) play(current, false); }); }
-    return { intro, spinTo, showCustom, reveal, isOpen: () => open, refresh() { custom = null; if (open) { src = null; build(); size(); goTo(0, false); render(); } else src = null; }, toggle };
+    return { intro, spinTo, showCustom, reveal, isOpen: () => open, refresh() { setScope(null); custom = null; if (open) { src = null; build(); size(); goTo(0, false); render(); } else src = null; }, toggle };
   })();
   // (always opens in Earth view on every device; Rolodex only when you pick it)
   { const af = applyFilter; applyFilter = function () { af.apply(this, arguments); rolo.refresh(); }; }
