@@ -261,3 +261,11 @@ button,input,select,label{touch-action:manipulation}
   #panel.single #plist{display:none}
   #panel.single header{padding:10px 14px}
 }
+
+/* desktop: single-station info card sizes to its content instead of a full-height panel */
+@media(min-width:821px){
+  #panel.single{bottom:auto;max-height:calc(100vh - 180px);max-height:calc(100dvh - 180px)}
+  #panel.single #pdetail{max-height:none;flex:1;min-height:0;border-bottom:0}
+  #panel.single #plist{display:none}
+  #player #pname,#player #plogo,#player #pmeta{cursor:pointer}
+}

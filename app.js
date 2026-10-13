@@ -644,7 +644,7 @@
       startElec = () => { if (++n < 6) pick(); };
       ctl.autoRotate = false; autoRotate = false; $('rotate').style.opacity = .5;
       pick();
-      if (innerWidth <= 820) $('panel').classList.add('hidden');   // phones open with the info card closed; tap the station name/logo to open it
+      $('panel').classList.add('hidden');   // opens with the info card closed; tap the station name/logo to open it
       tap.textContent = '▶ Tap to start the radio';
       setTimeout(() => { if (audio.paused && !ytOn) tap.style.display = 'block'; }, 2500);
       ['pointerdown', 'keydown', 'touchstart'].forEach(ev => addEventListener(ev, () => { if (tap.style.display !== 'none') { tap.style.display = 'none'; if (audio.paused && current && current[1]) audio.play().catch(() => {}); } }, { passive: true }));
