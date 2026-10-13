@@ -436,11 +436,25 @@
   const socOf = k => (socialData.items || []).filter(r => r.src === k).sort((x, y) => (y.viewers || 0) - (x.viewers || 0));
   const liveOfDJ = d => (socialData.items || []).find(r => r.src === d.src && String(r.id).toLowerCase() === String(d.id).replace(/^@/, '').toLowerCase());
   const matchQ = (q, ...parts) => { const h = fold(parts.filter(Boolean).join(' ')); return fold(q).split(' ').filter(Boolean).every(t => h.includes(t)); };
+  // switching platform tabs tunes straight into a random live stream of THAT platform (and stops the previous one)
+  function autoWatch(tab) {
+    const pool = (tab === 'tw' ? socOf('twitch') : tab === 'kick' ? socOf('kick') : tab === 'yt' ? ytLive().filter(r => !liveFam || (r.fam || []).includes(liveFam)).sort((x, y) => (y.views || 0) - (x.views || 0)) : []).slice(0, 30);
+    const busy = pool.filter(r => (r.viewers || r.views || 0) >= 3); if (busy.length >= 5) { pool.length = 0; pool.push(...busy); }   // prefer streams people are actually watching
+    const cur = watching && (watching.src || 'youtube') + ':' + watching.id;
+    const opts = pool.filter(r => (r.src || 'youtube') + ':' + r.id !== cur), pick = (opts.length ? opts : pool)[(Math.random() * (opts.length || pool.length)) | 0];
+    if (pick) { liveWatch(Object.assign({ kind: 'live' }, pick)); return; }
+    watching = null; renderLive();
+  }
+  const PLOGO = {
+    yt: '<svg viewBox="0 0 28 20" width="30" height="21"><rect width="28" height="20" rx="6" fill="#f00"/><path d="M11 5.5v9l8-4.5z" fill="#fff"/></svg>',
+    tw: '<svg viewBox="0 0 24 24" width="24" height="24"><path d="M3 2h19v13l-5 5h-4l-3 3v-3H3z" fill="#9146ff"/><rect x="11" y="7" width="2.2" height="6" fill="#fff"/><rect x="16" y="7" width="2.2" height="6" fill="#fff"/></svg>',
+    kick: '<svg viewBox="0 0 24 24" width="24" height="24"><rect width="24" height="24" rx="4" fill="#53fc18"/><path d="M6 4.5h3.6v5l4.2-5h4.4l-5.3 6.2 5.6 8.8h-4.3l-3.6-5.7-1 1.2v4.5H6z" fill="#0b0e0f"/></svg>'
+  };
   function renderLive() {
     const yt = ytLive(), tw = socOf('twitch'), kk = socOf('kick'), tt = socOf('tiktok');
     const famCount = {}; for (const r of yt) for (const f of (r.fam || [])) famCount[f] = (famCount[f] || 0) + 1;
     const tot = yt.length + tw.length + kk.length + tt.length;
-    $('ptitle').textContent = '🔴 Social live'; $('psub').textContent = tot + ' live right now · updated ' + (liveData.updated ? ago(Math.max(liveData.updated, socialData.updated || 0)) : '—');
+    $('ptitle').innerHTML = '🔴 Social live' + (PLOGO[liveTab] ? ' <span class="onair" title="On air: ' + SRC[liveTab][0] + '">' + PLOGO[liveTab] + '<i>LIVE</i></span>' : ''); $('psub').textContent = tot + ' live right now · updated ' + (liveData.updated ? ago(Math.max(liveData.updated, socialData.updated || 0)) : '—');
     $('pdetail').classList.remove('hidden');
     const tab = (k, l, n) => '<button data-lt="' + k + '" class="' + (liveTab === k ? 'on' : '') + '">' + l + '<b>' + n + '</b></button>';
     $('pdetail').innerHTML = '<div class="ltabs">' + tab('yt', 'YouTube', yt.length) + tab('tw', 'Twitch', tw.length) + tab('kick', 'Kick', kk.length) + tab('tt', 'TikTok', tt.length || '↗') + tab('ig', 'Insta', '↗') + '</div>' +
@@ -489,7 +503,7 @@
     if (r.lat != null) { ctl.autoRotate = false; autoRotate = false; globe.pointOfView({ lat: r.lat, lng: r.lon, altitude: 0.5 }, 1200); }
   }
   $('pdetail').addEventListener('click', e => {
-    const t = e.target.closest('[data-lt]'); if (t) { liveTab = t.dataset.lt; liveQ = ''; renderLive(); return; }
+    const t = e.target.closest('[data-lt]'); if (t) { liveTab = t.dataset.lt; liveQ = ''; autoWatch(liveTab); return; }
     if (e.target.closest('#lwstop')) { watching = null; renderLive(); }
   });
   $('pdetail').addEventListener('change', e => { if (e.target.id === 'lfsel') { liveFam = e.target.value; loadLiveFilter(); renderLive(); } });
