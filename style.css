@@ -369,3 +369,6 @@ button,input,select,label{touch-action:manipulation}
 .sa a.found{background:var(--acc);color:var(--acc-ink,#000);border-color:var(--acc);font-weight:700}
 .sa a.srch{opacity:.65;border-style:dashed}
 .snf{font-size:11px;color:var(--dim);align-self:center}
+
+.sa a.srch{opacity:1;border-style:solid}
+.sa a.found{background:var(--acc);color:var(--acc-ink,#000);border-color:var(--acc);font-weight:700}
