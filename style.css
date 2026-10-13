@@ -374,3 +374,5 @@ button,input,select,label{touch-action:manipulation}
 .sa a.found{background:var(--acc);color:var(--acc-ink,#000);border-color:var(--acc);font-weight:700}
 
 #loading{transition:opacity .6s ease}#loading.fading{opacity:0;pointer-events:none}
+
+#globe{cursor:grab}#globe.grabbing{cursor:grabbing}

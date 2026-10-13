@@ -253,12 +253,13 @@
   function pickAt(x, y, touch) { const d = pickNear(x, y, touch ? 34 : 20); return d ? d.c : null; }
   const gEl = $('globe'), tip = document.createElement('div'); tip.id = 'dtip'; tip.className = 'tip hidden'; document.body.appendChild(tip);
   gEl.addEventListener('pointermove', e => {
+    if (centerMode) return;   // scope stays fixed at the centre on every device; the mouse just moves the Earth
     if (e.buttons) { tip.classList.add('hidden'); return; }
     const c = pickAt(e.clientX, e.clientY, e.pointerType === 'touch');
     if (c !== hover) { hover = c; dirty = true; gEl.style.cursor = c ? 'pointer' : ''; }
     if (c) { tip.innerHTML = c.live ? '<b>🔴 LIVE · ' + esc(c.live.title) + '</b><span>' + esc(c.live.channel + (c.live.place ? ' · ' + c.live.place : '')) + '</span>' : c.ev ? '<b>' + esc(c.ev.name) + '</b><span>' + esc([c.ev.venue, c.ev.city].filter(Boolean).join(' · ')) + '</span>' : '<b>' + (c.n > 1 ? c.n + ' stations' : esc(c.list[0][0]) + (c.list[0][15] ? ' · ' + esc(c.list[0][15]) : '')) + '</b><span>' + (c.n > 1 ? esc(c.list.slice(0, 3).map(s => s[0]).join(' · ')) + (c.n > 3 ? ' …' : '') : esc(c.list[0][12] || '')) + '</span>'; tip.style.left = Math.min(innerWidth - 300, e.clientX + 14) + 'px'; tip.style.top = (e.clientY + 14) + 'px'; tip.classList.remove('hidden'); } else tip.classList.add('hidden');
   });
-  gEl.addEventListener('pointerleave', () => { tip.classList.add('hidden'); hover = null; dirty = true; });
+  gEl.addEventListener('pointerleave', () => { if (centerMode) return; tip.classList.add('hidden'); hover = null; dirty = true; });
   let down = null;
   gEl.addEventListener('pointerdown', e => { down = [e.clientX, e.clientY]; ptr = [e.clientX, e.clientY]; updateReticle(e.pointerType === 'touch' ? 34 : 20); });
   gEl.addEventListener('pointerup', e => { if (down && Math.hypot(e.clientX - down[0], e.clientY - down[1]) < 5) { const c = pickAt(e.clientX, e.clientY, e.pointerType === 'touch'); if (c) onCell(c); } down = null; });
@@ -275,7 +276,7 @@
   gEl.addEventListener('pointermove', e => { ptr = [e.clientX, e.clientY]; if (!e.buttons) updateReticle(e.pointerType === 'touch' ? 34 : 20); });
 
   // ---------- Radio Garden style: scroll the globe and the dot under the centre scope is selected; let go and it settles onto it and plays ----------
-  let centerMode = false, drag = false, dragMoved = false, snapping = false, autoPick = null, snapT = 0, lastPtr = null;
+  let centerMode = true, drag = false, dragMoved = false, snapping = false, autoPick = null, snapT = 0, lastPtr = null;
   const SNAP_R = () => innerWidth <= 820 ? 58 : 46, SEE_R = 150;
   function centerPick() {
     const x = innerWidth / 2, y = innerHeight / 2; let best = null, bd = SEE_R;
@@ -283,12 +284,14 @@
     return best ? { c: best.c, d: Math.max(0, bd), x: best.x, y: best.y } : null;
   }
   function tipFor(c) { return '<b>' + (c.n > 1 ? c.n + ' stations' : esc(c.list[0][0]) + (c.list[0][15] ? ' · ' + esc(c.list[0][15]) : '')) + '</b><span>' + (c.n > 1 ? esc(c.list.slice(0, 3).map(s => s[0]).join(' · ')) + (c.n > 3 ? ' …' : '') : esc(c.list[0][12] || '')) + '</span>'; }
-  function trackCenter() {   // runs on every camera change while scrolling: highlight what is under the scope
+  let camSpeed = 0, spPos = null, spT = 0;
+  function trackCenter() {   // runs after every render: highlight what is under the scope
     if (!centerMode || snapping) return;
+    { const cp = globe.camera().position, now = performance.now(); if (spPos) { const alt = globe.pointOfView().altitude, px = innerHeight / (0.93 * 100 * (1 + alt)); camSpeed = cp.distanceTo(spPos) * px / Math.max(0.001, (now - spT) / 1000); } spPos = cp.clone(); spT = now; }
     autoPick = centerPick();
     const h = autoPick ? autoPick.c : null;
     if (h !== hover) { hover = h; dirty = true; }
-    if (autoPick && autoPick.d <= SNAP_R()) { tip.innerHTML = tipFor(autoPick.c); tip.style.left = Math.min(innerWidth - 300, innerWidth / 2 + 34) + 'px'; tip.style.top = (innerHeight / 2 + 34) + 'px'; tip.classList.remove('hidden'); }
+    if (autoPick && autoPick.d <= SNAP_R() && camSpeed < 260) { tip.innerHTML = tipFor(autoPick.c); tip.style.left = Math.min(innerWidth - 300, innerWidth / 2 + 34) + 'px'; tip.style.top = (innerHeight / 2 + 34) + 'px'; tip.classList.remove('hidden'); }
     else tip.classList.add('hidden');
     updateReticle();
   }
@@ -305,7 +308,7 @@
     setTimeout(() => { ctl.enableDamping = true; snapping = false; hover = c; dirty = true; updateReticle(); }, 560);
   }
   gEl.addEventListener('pointerdown', e => {
-    drag = true; dragMoved = false; lastPtr = [e.clientX, e.clientY];
+    drag = true; dragMoved = false; lastPtr = [e.clientX, e.clientY]; gEl.classList.add('grabbing');
     if (snapping) { snapping = false; ctl.enableDamping = true; globe.pointOfView(globe.pointOfView(), 0); }   // grabbing the globe cancels the glide
   });
   // --- grab-the-point dragging: the spot of the Earth under your finger/cursor stays under it (like Radio Garden), with a smooth fling when you let go ---
@@ -352,13 +355,13 @@
     if (sm.length < 2) return;
     let wx = 0, wy = 0, wz = 0; for (const q of sm) { wx += q.n[0] * q.ang; wy += q.n[1] * q.ang; wz += q.n[2] * q.ang; }
     const dt = Math.max(30, sm[sm.length - 1].t - sm[0].t + 16) / 1000; let om = [wx / dt, wy / dt, wz / dt];
-    const alt = globe.pointOfView().altitude, pxPerRad = GR * innerHeight / (0.93 * GR * (1 + alt)), maxW = 1200 / pxPerRad;   // cap the fling speed (a steady glide, never a runaway spin)
+    const alt = globe.pointOfView().altitude, pxPerRad = GR * innerHeight / (0.93 * GR * (1 + alt)), maxW = 800 / pxPerRad;   // cap the fling speed (a steady glide, never a runaway spin)
     let w = Math.hypot(om[0], om[1], om[2]); if (w > maxW) { om = om.map(v => v * maxW / w); w = maxW; }
     if (w * pxPerRad < 140) return;   // small drags just stop where you let go
     let last = performance.now(), cur = w; const dir = om.map(v => v / w);
     const step = now => {
       const dt2 = Math.min(0.05, (now - last) / 1000); last = now;
-      cur *= Math.exp(-dt2 / 0.3);   // quick, controlled glide: velocity halves about every 0.2 s
+      cur *= Math.exp(-dt2 / 0.25);   // quick, controlled glide: velocity halves about every 0.2 s
       spinCam(dir, cur * dt2);
       if (cur * pxPerRad > 6) flingRaf = requestAnimationFrame(step); else flingRaf = 0;
     };
@@ -370,10 +373,9 @@
   setInterval(() => { if (performance.now() - drawnAt > 600) { try { frame(); } catch (e) {} } }, 400);   // safety net if the renderer ever stops
 
   addEventListener('pointermove', e => {
-    if (drag && !dragMoved && lastPtr && Math.hypot(e.clientX - lastPtr[0], e.clientY - lastPtr[1]) > 5) { dragMoved = true; centerMode = true; tip.classList.add('hidden'); }
-    else if (!drag && centerMode && !snapping && e.pointerType !== 'touch' && lastPtr && Math.hypot(e.clientX - lastPtr[0], e.clientY - lastPtr[1]) > 10) { centerMode = false; hover = null; dirty = true; ptr = [e.clientX, e.clientY]; updateReticle(); }
+    if (drag && !dragMoved && lastPtr && Math.hypot(e.clientX - lastPtr[0], e.clientY - lastPtr[1]) > 5) { dragMoved = true; tip.classList.add('hidden'); }
   }, true);
-  const dragEnd = e => { if (!drag) return; drag = false; lastCamPos = null; if (e && e.clientX !== undefined) lastPtr = [e.clientX, e.clientY]; clearTimeout(snapT); snapT = setTimeout(settle, 250); };
+  const dragEnd = e => { gEl.classList.remove('grabbing'); if (!drag) return; drag = false; lastCamPos = null; if (e && e.clientX !== undefined) lastPtr = [e.clientX, e.clientY]; clearTimeout(snapT); snapT = setTimeout(settle, 250); };
   addEventListener('pointerup', dragEnd, true); addEventListener('pointercancel', dragEnd, true); addEventListener('blur', () => dragEnd());
   let lastCamPos = null, lastCamT = 0;   // "still moving?" = the surface slides faster than ~10 px/s (ignores the long slow damping tail, at any frame rate)
   ctl.addEventListener('change', () => {
@@ -770,9 +772,9 @@
     const fast = pool.filter(x => fastOK(x) && !bad.has(x[13])); if (fast.length > 20) pool = fast;
     let s, t = 0; do { s = pool[(Math.random() * pool.length) | 0]; } while (s === current && ++t < 5);
     if (roloOn) { rolo.spinTo(s, () => {}); return; }
-    play(s, true); openPanel([s], s[0], s[12] || '');
+    play(s, true); if (innerWidth <= 820) $('panel').classList.add('hidden'); else openPanel([s], s[0], s[12] || '');   // the info card would block the view on phones/tablets
     if (s[2] != null) {   // swing the Earth round to the station and ease in just a touch
-      ctl.autoRotate = false; autoRotate = false; $('rotate').style.opacity = .5; centerMode = false; hover = null; stopFling(); tip.classList.add('hidden');
+      ctl.autoRotate = false; autoRotate = false; $('rotate').style.opacity = .5; stopFling(); tip.classList.add('hidden');
       const pov = globe.pointOfView(), dl = ((((s[3] - pov.lng) % 360) + 540) % 360) - 180;
       globe.pointOfView({ lat: s[2], lng: pov.lng + dl, altitude: pov.altitude > 1.1 ? Math.max(1.0, pov.altitude * 0.85) : pov.altitude }, 1500);
     }
