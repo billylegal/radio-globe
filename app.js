@@ -484,22 +484,24 @@
   function ytShow(song) { $('pname').textContent = 'Billy Legal Radio'; $('pmeta').textContent = (song ? song + ' · ' : '') + 'Toronto, Canada · shuffled 24/7'; }
   function ytPlayPos(p) {
     if (p >= ytQ.length) { ytQ = shuffleArr(ytSongs); p = 0; } if (p < 0) p = 0;
-    ytPos = p; const sg = ytQ[p]; ytShow(sg[1]); yt.loadVideoById(sg[0]);
+    ytPos = p; const sg = ytQ[p]; ytShow(sg[1]); ytTrack('Billy Legal - ' + sg[1], sg[0]); yt.loadVideoById(sg[0]);
   }
   // 1UP Radio: follows the live schedule published at 1upradio.com
   const upNow = () => { let k = 0; const src = Date.now() / 1000 - (upS.delay || 0); for (let i = 0; i < upS.plays.length; i++) { if (upS.plays[i].t <= src) k = i; else break; } return k; };
+  const ytNow = { t: '', id: '', sid: '' };   // song currently on the 1UP Radio / Billy Legal Radio YouTube player (for the save button)
+  const ytTrack = (t, id) => { ytNow.t = t; ytNow.id = id; ytNow.sid = current ? current[13] : ''; try { npPoll(); } catch (e) {} };
   let upTimer = null, upCurAlt = 0, upCur = null; const upBad = {};
   function upClear() { if (upTimer) { clearTimeout(upTimer); upTimer = null; } }
   // If YouTube will not play a song here, EVERY listener (this page and 1upradio.com) swaps in the same replacement for that slot, picked by a fixed rule, so they stay in step.
   function upAltIdx(i, n) { const lo = Math.max(0, i - 900), hi = Math.max(lo + 1, i - 40), len = hi - lo; return lo + ((((i * 2654435761 + n * 40503 + 7) % len) + len) % len); }
   function upSlotPlay(i, n) { return n === 0 ? upS.plays[i] : upS.plays[upAltIdx(i, n)]; }
   function upPlayIdx(i, offset, n) {
-    upClear();
+    upClear(); if (ytMode !== 'up' || !ytOn) return;   // a timer from an earlier 1UP session must not take over another station
     const pl = upS.plays; if (!pl.length) return;
     if (i >= pl.length) { i = Math.max(0, pl.length - 40 + ((Math.random() * 30) | 0)); offset = 0; n = 0; }
     n = n || 0; let p = upSlotPlay(i, n);
     while (n < 8 && upBad[p.id]) { n++; p = upSlotPlay(i, n); }
-    upIdx = i; upCurAlt = n; upCur = p; const k = p.title.indexOf(' - ');
+    upIdx = i; upCurAlt = n; upCur = p; ytTrack(p.title, p.id); const k = p.title.indexOf(' - ');
     $('pname').textContent = '1UP Radio - Keep the Volume Up';
     $('pmeta').textContent = (k > 0 ? p.title.slice(k + 3) + ' · ' + p.title.slice(0, k) : p.title) + ' · live schedule';
     offset = Math.max(0, Math.floor(offset || 0));
@@ -521,13 +523,13 @@
   }
   const ytNext = () => { if (ytMode === 'up') upNext(); else ytPlayPos(ytPos + 1); };
   async function ytStart(mode) {
-    ytMode = mode || 'bl'; ytOn = true; ytErr = 0; const tok = ++ytTok;
+    upClear(); ytMode = mode || 'bl'; ytOn = true; ytErr = 0; const tok = ++ytTok;
     let first;
     if (ytMode === 'up') { try { const [k, off] = await upStart(); first = () => upPlayIdx(k, off); } catch (e) { $('pmeta').textContent = '1UP Radio schedule unavailable right now'; ytOn = false; return; } }
     else { await ytSongList(); ytQ = shuffleArr(ytSongs); ytPos = -1; first = () => ytPlayPos(0); }
     if (tok !== ytTok) return;   // another station was chosen while this one was loading
     const init = () => { if (tok !== ytTok) return; if (yt) { first(); return; } yt = new YT.Player('ytplayer', { width: 200, height: 200, playerVars: { playsinline: 1, rel: 0, modestbranding: 1, iv_load_policy: 3 }, events: { onReady: () => { if (tok !== ytTok) return; try { yt.setVolume(Math.round(+$('vol').value * 100)); } catch (e) {} first(); },
-      onStateChange: e => { if (e.data === 1 && !ytOn) { try { yt.stopVideo(); } catch (x) {} return; } if (e.data === 1) { try { audio.pause(); } catch (x) {} stopWatch(); try { announce(); } catch (x) {} ytPlaying = true; ytErr = 0; try { if (!yt.isMuted()) yt.setVolume(Math.round(+$('vol').value * 100)); } catch (x) {} $('pplay').textContent = '❚❚'; } else if (e.data === 2) { ytPlaying = false; $('pplay').textContent = '▶'; } else if (e.data === 0) ytNext(); },
+      onStateChange: e => { if (e.data === 1 && !ytOn) { try { yt.stopVideo(); } catch (x) {} return; } if (e.data === 1) { try { audio.pause(); } catch (x) {} stopWatch(); try { announce(); } catch (x) {} try { npPoll(); } catch (x) {} ytPlaying = true; ytErr = 0; try { if (!yt.isMuted()) yt.setVolume(Math.round(+$('vol').value * 100)); } catch (x) {} $('pplay').textContent = '❚❚'; } else if (e.data === 2) { ytPlaying = false; $('pplay').textContent = '▶'; } else if (e.data === 0) ytNext(); },
       onError: () => { if (ytMode === 'up' && upS && upS.plays[upIdx]) { if (upCur) upBad[upCur.id] = 1; if (++ytErr < 8) { upPlayIdx(upIdx, Date.now() / 1000 - (upS.delay || 0) - upS.plays[upIdx].t, upCurAlt + 1); return; } } else if (++ytErr < 6) { ytNext(); return; } else $('pmeta').textContent = (ytMode === 'up' ? '1UP Radio' : 'Billy Legal Radio') + ' is unavailable right now'; } } }); };
     if (window.YT && YT.Player) init(); else { window.onYouTubeIframeAPIReady = init; const sc = document.createElement('script'); sc.src = 'https://www.youtube.com/iframe_api'; document.head.appendChild(sc); }
   }
@@ -948,7 +950,7 @@
   { const af = applyFilter; applyFilter = function () { af.apply(this, arguments); rolo.refresh(); }; }
 
   // ---------- now playing (song titles read from the stream) + saved songs ----------
-  const np = { title: '', sid: '', dead: new Set() };
+  const np = { title: '', sid: '', vid: '', dead: new Set() };
   async function icyTitle(url) {   // classic Shoutcast/Icecast in-stream metadata (works where the station allows browser access)
     const ac = new AbortController(), to = setTimeout(() => ac.abort(), 7000);
     try {
@@ -976,7 +978,13 @@
   const cleanTitle = (t, s) => { t = (t || '').replace(/\s+/g, ' ').replace(/^[-–\s]+|[-–\s]+$/g, ''); return t.length < 3 || t.toLowerCase() === s[0].toLowerCase() ? '' : t; };
   function npSet(t) { np.title = t || ''; $('pnow').textContent = np.title ? '♪ ' + np.title : ''; $('saveSong').classList.toggle('ready', !!np.title); try { audio.dispatchEvent(new Event('npchange')); } catch (e) {} }
   async function npPoll() {
-    const s = current; if (!s || !s[1] || isUP(s) || isBL(s) || ytOn || audio.paused || /\.m3u8(\?|$)/i.test(s[1])) return;
+    const s = current;
+    if (s && (isUP(s) || isBL(s))) {   // YouTube-based radios know their own song
+      np.sid = s[13]; np.vid = ytNow.sid === s[13] ? ytNow.id : '';
+      npSet(ytNow.sid === s[13] ? cleanTitle(ytNow.t.replace(/\s*[\(\[](official|lyrics?|audio|video|hd|hq|music)[^\)\]]*[\)\]]/gi, ''), s) : ''); return;
+    }
+    np.vid = '';
+    if (!s || !s[1] || ytOn || audio.paused || /\.m3u8(\?|$)/i.test(s[1])) return;
     if (np.sid !== s[13]) { np.sid = s[13]; npSet(''); }
     if (np.dead.has(s[13])) return;
     let t = await icyTitle(s[1]); if (t === null) t = await icecastTitle(s[1]);
@@ -997,14 +1005,14 @@
     const t = current === s ? np.title : ''; 
     if (!t) { toast(np.dead.has(s[13]) ? "This station doesn't share song titles" : 'No song title right now — try again in a moment'); return; }
     if (songs.some(x => x.t === t && x.sid === s[13])) { toast('Already saved'); return; }
-    songs.unshift({ t, st: s[0], sid: s[13], cc: s[12] || '', ts: Date.now() }); saveSongs(); toast('🎵 Saved: ' + t); if (!$('songs').classList.contains('hidden')) renderSongs();
+    songs.unshift({ t, st: s[0], sid: s[13], cc: s[12] || '', ts: Date.now(), vid: current === s ? np.vid : '' }); saveSongs(); toast('🎵 Saved: ' + t); if (!$('songs').classList.contains('hidden')) renderSongs();
   }
   $('saveSong').onclick = saveSong;
   const q = encodeURIComponent;
   function renderSongs() {
     $('songsCount').textContent = songs.length;
     $('songsList').innerHTML = songs.length ? songs.map((x, i) => '<div class="srow" data-i="' + i + '"><div class="st"><div class="sn">' + esc(x.t) + '</div><div class="sm">' + esc([x.st, x.cc, new Date(x.ts).toLocaleDateString()].filter(Boolean).join(' · ')) + '</div>' +
-      '<div class="sa"><a href="https://www.youtube.com/results?search_query=' + q(x.t) + '" target="_blank" rel="noopener">▶ YouTube</a><a href="https://open.spotify.com/search/' + q(x.t) + '" target="_blank" rel="noopener">Spotify</a><a href="https://music.apple.com/search?term=' + q(x.t) + '" target="_blank" rel="noopener">Apple</a><button data-a="tune">📻 Station</button></div></div>' +
+      '<div class="sa"><a href="' + (x.vid ? 'https://www.youtube.com/watch?v=' + x.vid : 'https://www.youtube.com/results?search_query=' + q(x.t)) + '" target="_blank" rel="noopener">▶ YouTube</a><a href="https://open.spotify.com/search/' + q(x.t) + '" target="_blank" rel="noopener">Spotify</a><a href="https://music.apple.com/search?term=' + q(x.t) + '" target="_blank" rel="noopener">Apple</a><button data-a="tune">📻 Station</button></div></div>' +
       '<button class="sdel" data-a="del" title="Remove">✕</button></div>').join('') : '<div class="fempty">No songs saved yet.<br>Tap 🎵 in the player bar while a song with a title is playing.</div>';
   }
   const songsOpen = on => { $('songs').classList.toggle('hidden', !on); $('songsTop').classList.toggle('on', on); if (on) renderSongs(); };
