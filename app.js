@@ -288,15 +288,15 @@
     return best ? { c: best.c, d: Math.max(0, bd), x: best.x, y: best.y } : null;
   }
   function tipFor(c) { return '<b>' + (c.n > 1 ? c.n + ' stations' : esc(c.list[0][0]) + (c.list[0][15] ? ' · ' + esc(c.list[0][15]) : '')) + '</b><span>' + (c.n > 1 ? esc(c.list.slice(0, 3).map(s => s[0]).join(' · ')) + (c.n > 3 ? ' …' : '') : esc(c.list[0][12] || '')) + '</span>'; }
-  let camSpeed = 0, spPos = null, spT = 0;
+  let camSpeed = 0, spPos = null, spT = 0, tipKey = null, tipSince = 0;   // the centre tooltip stays up ~3 s, then goes (touch the scope to bring it back)
   function trackCenter() {   // runs after every render: highlight what is under the scope
     if (!centerMode || snapping) return;
     { const cp = globe.camera().position, now = performance.now(); if (spPos) { const alt = globe.pointOfView().altitude, px = innerHeight / (0.93 * 100 * (1 + alt)); camSpeed = cp.distanceTo(spPos) * px / Math.max(0.001, (now - spT) / 1000); } spPos = cp.clone(); spT = now; }
     autoPick = centerPick();
     const h = autoPick ? autoPick.c : null;
     if (h !== hover) { hover = h; dirty = true; }
-    if (autoPick && autoPick.d <= SNAP_R() && camSpeed < 260 && !(innerWidth <= 820 && !$('panel').classList.contains('hidden'))) { tip.innerHTML = tipFor(autoPick.c); tip.style.left = Math.min(innerWidth - 300, innerWidth / 2 + 34) + 'px'; tip.style.top = (innerHeight / 2 + 34) + 'px'; tip.classList.remove('hidden'); }
-    else tip.classList.add('hidden');
+    if (autoPick && autoPick.d <= SNAP_R() && camSpeed < 260 && !(innerWidth <= 820 && !$('panel').classList.contains('hidden')) && ((autoPick.c !== tipKey && (tipKey = autoPick.c, tipSince = performance.now(), true)) || performance.now() - tipSince < 3000)) { tip.innerHTML = tipFor(autoPick.c); tip.style.left = Math.min(innerWidth - 300, innerWidth / 2 + 34) + 'px'; tip.style.top = (innerHeight / 2 + 34) + 'px'; tip.classList.remove('hidden'); }
+    else { tip.classList.add('hidden'); if (!autoPick || autoPick.d > SNAP_R()) tipKey = null; }
     updateReticle();
   }
   function settle() {
@@ -305,13 +305,14 @@
     if (!autoPick || autoPick.d > SNAP_R()) { dragMoved = false; return; }
     const c = autoPick.c, pov = globe.pointOfView(), s = c.list[0];
     snapping = true; dragMoved = false; ctl.enableDamping = false; try { ctl.update(); } catch (e) {}   // kill leftover momentum so the glide lands exactly on the dot
-    tip.innerHTML = tipFor(c); tip.classList.remove('hidden');
+    tip.innerHTML = tipFor(c); tip.classList.remove('hidden'); tipKey = c; tipSince = performance.now();
     if (current !== s && !c.live && !c.ev) play(s, false);   // start buffering while it glides in
     const dl = ((((c.lng - pov.lng) % 360) + 540) % 360) - 180;
     globe.pointOfView({ lat: c.lat, lng: pov.lng + dl, altitude: pov.altitude }, 520);
     setTimeout(() => { ctl.enableDamping = true; snapping = false; hover = c; dirty = true; updateReticle(); }, 560);
   }
   gEl.addEventListener('pointerdown', e => {
+    if (Math.hypot(e.clientX - innerWidth / 2, e.clientY - innerHeight / 2) < 56) tipSince = performance.now();   // tapping the scope shows its label again for 3 s
     drag = true; dragMoved = false; lastPtr = [e.clientX, e.clientY]; gEl.classList.add('grabbing');
     if (snapping) { snapping = false; ctl.enableDamping = true; globe.pointOfView(globe.pointOfView(), 0); }   // grabbing the globe cancels the glide
   });
@@ -343,13 +344,20 @@
     gptrs = e.isPrimary ? 1 : gptrs + 1; stopFling(); gsamp = [];
     if (gptrs > 1) { grab = null; return; }   // pinch: leave it to the zoom control
     ctl.autoRotate = false; autoRotate = false; $('rotate').style.opacity = .5;
-    grab = rayHit(e.clientX, e.clientY);
+    grab = rayHit(e.clientX, e.clientY) ? [e.clientX, e.clientY] : null;
   });
   addEventListener('pointermove', e => {
     if (!grab || !drag || gptrs > 1) return;
-    const h = rayHit(e.clientX, e.clientY); if (!h) return;
-    const ax = [h[1] * grab[2] - h[2] * grab[1], h[2] * grab[0] - h[0] * grab[2], h[0] * grab[1] - h[1] * grab[0]], s = Math.hypot(ax[0], ax[1], ax[2]), ang = Math.atan2(s, h[0] * grab[0] + h[1] * grab[1] + h[2] * grab[2]);
+    const pp = grab; grab = [e.clientX, e.clientY];   // grab = previous pointer position (incremental: no catching-up jumps)
+    const dpx = Math.hypot(e.clientX - pp[0], e.clientY - pp[1]); if (dpx < 0.3) { grab = pp; return; }
+    const p0 = rayHit(pp[0], pp[1]), h = rayHit(e.clientX, e.clientY); if (!p0 || !h) return;
+    const cam = globe.camera().position, Lc = Math.hypot(cam.x, cam.y, cam.z);
+    { const c = (h[0] * cam.x + h[1] * cam.y + h[2] * cam.z) / Lc, c0 = GR / Lc; if ((c - c0) / (1 - c0) < 0.08) return; }   // right at the horizon: ignore (a hair of movement there would whip the globe round)
+    const ax = [h[1] * p0[2] - h[2] * p0[1], h[2] * p0[0] - h[0] * p0[2], h[0] * p0[1] - h[1] * p0[0]], s = Math.hypot(ax[0], ax[1], ax[2]);
+    let ang = Math.atan2(s, h[0] * p0[0] + h[1] * p0[1] + h[2] * p0[2]);
     if (s < 1e-9 || ang < 1e-7) return;
+    const alt = globe.pointOfView().altitude, radPerPx = (0.93 * (1 + alt)) / innerHeight;   // rotation per pixel at the globe's centre
+    ang = Math.min(ang, dpx * radPerPx * 1.35);   // never turn faster than the finger moves at the centre (+35%): steady at the edge
     const n = [ax[0] / s, ax[1] / s, ax[2] / s]; spinCam(n, ang);
     const t = performance.now(); gsamp.push({ t, n, ang }); while (gsamp.length && t - gsamp[0].t > 110) gsamp.shift();
   }, true);
