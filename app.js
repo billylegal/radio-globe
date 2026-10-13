@@ -592,16 +592,29 @@
     if (hls) { hls.destroy(); hls = null; }
     const url = s[1];
     if (/\.m3u8(\?|$)/i.test(url) && window.Hls && Hls.isSupported()) { hls = new Hls(); hls.loadSource(url); hls.attachMedia(audio); hls.on(Hls.Events.ERROR, (_, d) => d.fatal && failed()); }
-    else audio.src = url;
+    else if (audio.src !== url) audio.src = url;   // (the early-start script may already be loading this exact stream)
     audio.play().catch(() => {});
+    watchdog(s);
     pulseT = performance.now();
     if (fly) flyTo(s);
     document.querySelectorAll('.row').forEach(r => r.classList.toggle('now', panelList[+r.dataset.i] && panelList[+r.dataset.i][13] === s[13]));
     fetch('https://de1.api.radio-browser.info/json/url/' + s[13], { mode: 'no-cors' }).catch(() => {});
   }
-  let startElec = null;
+  let startElec = null, startCur = null, wdT = 0;
+  const lsGet = k => { try { return JSON.parse(localStorage.getItem(k) || '[]'); } catch (e) { return []; } };
+  const lsAdd = (k, v, cap) => { try { const l = lsGet(k).filter(x => x !== v); l.push(v); localStorage.setItem(k, JSON.stringify(l.slice(-cap))); } catch (e) {} };
+  const fastOK = s => s[1] && typeof s[1] === 'string' && /^https:/i.test(s[1]) && !/\.(m3u8|pls|m3u)(\?|$)/i.test(s[1]) && (!s[6] || /^(MP3|AAC\+?)$/i.test(s[6]));   // https + direct MP3/AAC connects fastest (http streams are often blocked on an https page)
+  const markBad = s => lsAdd('rg-bad', s[13], 300);
+  audio.addEventListener('playing', () => { clearTimeout(wdT); startElec = null; if (current && current[1]) { lsAdd('rg-good', current[13], 80); if (fastOK(current)) { try { const l = lsGet('rg-fast').filter(x => x[0] !== current[13]); l.push([current[13], current[1]]); localStorage.setItem('rg-fast', JSON.stringify(l.slice(-25))); } catch (e) {} } } });
+  // give up on a station that has not produced sound in 3.5 s and try another straight away
+  function watchdog(s) {
+    clearTimeout(wdT);
+    if (!(randomMode || (startElec && s === startCur))) return;
+    wdT = setTimeout(() => { if (current === s && audio.readyState < 3) { markBad(s); if (randomMode) randomStation(); else if (startElec && s === startCur) startElec(); } }, 3500);
+  }
   function failed() {
-    if (startElec && !randomMode) { startElec(); return; }
+    if (current) markBad(current);
+    if (startElec && !randomMode && current === startCur) { startElec(); return; }
     $('pmeta').textContent = 'This stream is unavailable right now' + (randomMode ? ' — trying another…' : '');
     if (randomMode && ++tries < 4) setTimeout(() => randomStation(), 500);
   }
@@ -613,7 +626,8 @@
   const prevPlayClick = $('pplay').onclick = () => { if (ytOn && yt && yt.getPlayerState) { ytPlaying ? yt.pauseVideo() : yt.playVideo(); return; } if (!current) return; audio.paused ? audio.play().catch(failed) : audio.pause(); };
   function randomStation() {
     if (!shown.length) return; randomMode = true;
-    const pool = shown.filter(x => x[1]); if (!pool.length) return;
+    const bad = new Set(lsGet('rg-bad')); let pool = shown.filter(x => x[1]); if (!pool.length) return;
+    const fast = pool.filter(x => fastOK(x) && !bad.has(x[13])); if (fast.length > 20) pool = fast;
     let s, t = 0; do { s = pool[(Math.random() * pool.length) | 0]; } while (s === current && ++t < 5);
     if (roloOn) { rolo.spinTo(s, () => {}); return; }
     play(s, true); openPanel([s], s[0], s[12] || '');
@@ -644,11 +658,16 @@
     };
     ['pointerdown', 'keydown', 'touchstart'].forEach(ev => addEventListener(ev, () => { if (tap.style.display !== 'none' || muted) unlock(); }, { passive: true }));
     // every visit starts on a fresh random Electronic station (1UP Radio is the fallback)
-    const elec = S.filter(s => s[1] && typeof s[1] === 'string' && !isUP(s) && !isBL(s) && s[11].some(g => famOf[g] === 'Electronic'));
+    const bad0 = new Set(lsGet('rg-bad'));
+    const elecAll = S.filter(s => s[1] && typeof s[1] === 'string' && !isUP(s) && !isBL(s) && s[11].some(g => famOf[g] === 'Electronic'));
+    // opening pool: popular, https, direct MP3/AAC electronic stations (fastest to connect); stations that worked before come first
+    let elec = elecAll.filter(s => fastOK(s) && s[5] >= 20 && !bad0.has(s[13])); if (elec.length < 30) elec = elecAll.filter(s => !bad0.has(s[13]));
+    const goodIds = new Set(lsGet('rg-good')), goodList = elec.filter(s => goodIds.has(s[13]));
     if (elec.length) {
       elecMode = true; let n = 0;
-      const pick = () => { const s = elec[(Math.random() * elec.length) | 0]; play(s, false); };
-      startElec = () => { if (++n < 6) pick(); };
+      const early = window.__early && S.find(x => x[13] === window.__early.id); window.__early = null;
+      const pick = () => { if (early && n === 0) { startCur = early; play(early, false); return; } const src = goodList.length >= 3 && Math.random() < 0.7 ? goodList : elec; const s = src[(Math.random() * src.length) | 0]; startCur = s; play(s, false); };
+      startElec = () => { if (++n < 8) pick(); };
       ctl.autoRotate = false; autoRotate = false; $('rotate').style.opacity = .5;
       pick();
       $('panel').classList.add('hidden');   // opens with the info card closed; tap the station name/logo to open it
