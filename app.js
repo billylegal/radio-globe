@@ -47,8 +47,9 @@
     history.replaceState(null, '', filter.kind === 'all' ? location.pathname : '#' + encodeURIComponent(filter.kind === 'genre' ? G[filter.id].name : filter.kind === 'set' ? filter.key : filter.fam));
     refreshPoints();
     document.querySelectorAll('.chip,.allbtn').forEach(e => e.classList.remove('on'));
-    const on = filter.kind === 'all' ? $('allbtn') : filter.kind === 'genre' ? document.querySelector('.chip[data-g="' + filter.id + '"]') : null;
+    const on = filter.kind === 'all' && !lyricsOnly ? $('allbtn') : filter.kind === 'genre' ? document.querySelector('.chip[data-g="' + filter.id + '"]') : null;
     if (on) on.classList.add('on');
+    if ($('lyrbtn')) $('lyrbtn').classList.toggle('on', lyricsOnly);
     document.querySelectorAll('#genres .fh[data-set]').forEach(b => b.classList.toggle('on', filter.kind === 'set' && filter.key === b.dataset.set));
   }
 
@@ -67,10 +68,9 @@
     try {
       const d = await (await fetch('data/lyric_stations.json?t=' + Date.now())).json(); if (!d.updated || d.updated === lyricStamp) return; lyricStamp = d.updated;
       lyricSet.clear(); for (const r of d.items || []) lyricSet.set(r.u, r.title);
-      $('lyrN').textContent = lyricSet.size ? '(' + lyricSet.size + ' right now)' : ''; if (lyricsOnly) applyFilter();
+      const lb = $('lyrbtn'); if (lb) lb.querySelector('small').textContent = lyricSet.size ? lyricSet.size + ' now' : '…'; if (lyricsOnly) applyFilter();
     } catch (e) {}
   }
-  $('lyricsOnly').addEventListener('change', e => { lyricsOnly = e.target.checked; applyFilter(); if (lyricsOnly) { if (!lyricSet.size) toast('Looking for stations with lyrics…'); showGenreList('Stations with lyrics'); } });
   loadLyricStations(); setInterval(loadLyricStations, 60000);
   function stationColor(s) { return s[11].length ? FAMCOL[famOf[s[11][0]]] || NOGENRE : NOGENRE; }
   function cluster(altitude) {
@@ -1497,7 +1497,7 @@
   // ---------- genre sidebar ----------
   const fams = [...new Set(G.map(g => g.family))];
   function buildGenres(q) {
-    q = (q || '').toLowerCase(); let html = '<button id="allbtn" class="allbtn' + (filter.kind === 'all' ? ' on' : '') + '">🌍 All stations <small>' + S.length.toLocaleString() + '</small></button>';
+    q = (q || '').toLowerCase(); let html = '<div class="allrow"><button id="allbtn" class="allbtn' + (filter.kind === 'all' && !lyricsOnly ? ' on' : '') + '">🌍 All stations<small>' + S.length.toLocaleString() + '</small></button><button id="lyrbtn" class="allbtn' + (lyricsOnly ? ' on' : '') + '" title="Only stations playing a song with lyrics right now">🎤 Lyric stations<small>' + (lyricSet.size ? lyricSet.size + ' now' : '…') + '</small></button></div>';
     for (const f of fams) {
       const gs = G.filter(g => g.family === f && (!q || g.name.toLowerCase().includes(q)));
       if (!gs.length) continue;
@@ -1518,7 +1518,8 @@
   $('genres').addEventListener('click', e => {
     const sb = e.target.closest('.fh[data-set]'); if (sb) { chooseSet(sb.dataset.set); return; }
     if (e.target.closest('.chip[data-dj]')) { openDJMixes(); if (innerWidth <= 820) sideOpen(false); return; }
-    if (e.target.closest('#allbtn')) { filter = { kind: 'all' }; return applyFilter(); }
+    if (e.target.closest('#allbtn')) { filter = { kind: 'all' }; lyricsOnly = false; return applyFilter(); }
+    if (e.target.closest('#lyrbtn')) { lyricsOnly = !lyricsOnly; if (lyricsOnly && !lyricSet.size) toast('Looking for stations with lyrics…'); applyFilter(); if (lyricsOnly) { showGenreList('Stations with lyrics'); if (innerWidth <= 820) sideOpen(false); } return; }
     const chip = e.target.closest('.chip'); if (chip) { filter = { kind: 'genre', id: +chip.dataset.g }; applyFilter(); return showGenreList(G[filter.id].name); }
     const fh = e.target.closest('.fh'); if (fh) { fh.parentElement.classList.toggle('open'); if (e.detail === 2) { filter = { kind: 'family', fam: fh.dataset.fam }; applyFilter(); showGenreList(fh.dataset.fam); } }
   });
