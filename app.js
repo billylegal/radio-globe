@@ -83,7 +83,7 @@
   const ctl = globe.controls();
   ctl.autoRotate = true; ctl.autoRotateSpeed = 0.35; ctl.minDistance = 100.12; ctl.maxDistance = 520; ctl.zoomSpeed = 0.9; ctl.enableDamping = true;
   try { globe.renderer().setPixelRatio(Math.min(devicePixelRatio || 1, innerWidth <= 820 ? 1.5 : 2)); } catch (e) {}
-  globe.pointOfView({ lat: 30, lng: 10, altitude: innerWidth < 500 ? 4.4 : innerWidth < innerHeight ? 3.2 : 2.4 });
+  globe.pointOfView({ lat: 30, lng: 10, altitude: innerWidth < 500 ? 3.3 : innerWidth < innerHeight ? 2.4 : 1.7 });
   addEventListener('resize', () => globe.width(innerWidth).height(innerHeight));
   let tmr, lastAlt = -1;
   function schedule() { clearTimeout(tmr); tmr = setTimeout(() => { const a = globe.pointOfView().altitude; if (Math.abs(a - lastAlt) / Math.max(a, .05) > 0.12) refreshPoints(); }, 140); }
@@ -779,7 +779,7 @@
   $('rotate').onclick = () => { autoRotate = !autoRotate; ctl.autoRotate = autoRotate; $('rotate').style.opacity = autoRotate ? 1 : .5; };
   $('spaceBtn').onclick = () => { if (roloOn) { rolo.toggle(false); setSpaced(false, true); } else if (spaced) rolo.toggle(true); else setSpaced(true, true); };   // Earth -> Ghost -> Rolodex -> Earth
   // ---------- always open in Ghost view with 1UP Radio playing ----------
-  setSpaced(true);
+  setSpaced(false);
   {
     const up = S.find(isUP);
     const tap = document.createElement('div'); tap.id = 'tapStart'; tap.textContent = '▶ Tap to start 1UP Radio'; tap.style.display = 'none'; document.body.appendChild(tap);
