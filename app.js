@@ -314,6 +314,7 @@
     $('plist').innerHTML = rows; panelList = [];
   }
   const watchHTML = r => '<div class="lw"><iframe src="https://www.youtube-nocookie.com/embed/' + esc(r.id) + '?autoplay=1&rel=0&modestbranding=1" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe><div class="lwt"><span>' + esc(r.title) + '</span><button id="lwstop" title="Stop watching">✕</button></div></div>';
+  function stopWatch() { if (!watching) return; watching = null; const lw = $('livewatch'); if (lw) lw.innerHTML = ''; }
   function liveWatch(r) {
     audio.pause(); if (hls) { hls.destroy(); hls = null; } ytStop(); $('pplay').textContent = '▶';
     watching = r; openLive(liveTab);
@@ -520,12 +521,13 @@
   }
   const ytNext = () => { if (ytMode === 'up') upNext(); else ytPlayPos(ytPos + 1); };
   async function ytStart(mode) {
-    ytMode = mode || 'bl'; ytOn = true; ytErr = 0;
+    ytMode = mode || 'bl'; ytOn = true; ytErr = 0; const tok = ++ytTok;
     let first;
     if (ytMode === 'up') { try { const [k, off] = await upStart(); first = () => upPlayIdx(k, off); } catch (e) { $('pmeta').textContent = '1UP Radio schedule unavailable right now'; ytOn = false; return; } }
     else { await ytSongList(); ytQ = shuffleArr(ytSongs); ytPos = -1; first = () => ytPlayPos(0); }
-    const init = () => { if (yt) { first(); return; } yt = new YT.Player('ytplayer', { width: 200, height: 200, playerVars: { playsinline: 1, rel: 0, modestbranding: 1, iv_load_policy: 3 }, events: { onReady: () => { try { yt.setVolume(Math.round(+$('vol').value * 100)); } catch (e) {} first(); },
-      onStateChange: e => { if (e.data === 1) { ytPlaying = true; ytErr = 0; try { if (!yt.isMuted()) yt.setVolume(Math.round(+$('vol').value * 100)); } catch (x) {} $('pplay').textContent = '❚❚'; } else if (e.data === 2) { ytPlaying = false; $('pplay').textContent = '▶'; } else if (e.data === 0) ytNext(); },
+    if (tok !== ytTok) return;   // another station was chosen while this one was loading
+    const init = () => { if (tok !== ytTok) return; if (yt) { first(); return; } yt = new YT.Player('ytplayer', { width: 200, height: 200, playerVars: { playsinline: 1, rel: 0, modestbranding: 1, iv_load_policy: 3 }, events: { onReady: () => { if (tok !== ytTok) return; try { yt.setVolume(Math.round(+$('vol').value * 100)); } catch (e) {} first(); },
+      onStateChange: e => { if (e.data === 1 && !ytOn) { try { yt.stopVideo(); } catch (x) {} return; } if (e.data === 1) { try { audio.pause(); } catch (x) {} stopWatch(); try { announce(); } catch (x) {} ytPlaying = true; ytErr = 0; try { if (!yt.isMuted()) yt.setVolume(Math.round(+$('vol').value * 100)); } catch (x) {} $('pplay').textContent = '❚❚'; } else if (e.data === 2) { ytPlaying = false; $('pplay').textContent = '▶'; } else if (e.data === 0) ytNext(); },
       onError: () => { if (ytMode === 'up' && upS && upS.plays[upIdx]) { if (upCur) upBad[upCur.id] = 1; if (++ytErr < 8) { upPlayIdx(upIdx, Date.now() / 1000 - (upS.delay || 0) - upS.plays[upIdx].t, upCurAlt + 1); return; } } else if (++ytErr < 6) { ytNext(); return; } else $('pmeta').textContent = (ytMode === 'up' ? '1UP Radio' : 'Billy Legal Radio') + ' is unavailable right now'; } } }); };
     if (window.YT && YT.Player) init(); else { window.onYouTubeIframeAPIReady = init; const sc = document.createElement('script'); sc.src = 'https://www.youtube.com/iframe_api'; document.head.appendChild(sc); }
   }
@@ -547,7 +549,8 @@
       if (dur && expected < dur - 5 && Math.abs(cur - expected) > 20) { upLast = Date.now(); yt.seekTo(expected, true); }   // paused or stalled: catch up to live
     } catch (e) {}
   }, 6000);
-  function ytStop() { if (!ytOn) return; ytOn = false; ytPlaying = false; try { yt && yt.stopVideo(); } catch (e) {} }
+  let ytTok = 0;
+  function ytStop() { ytTok++; if (typeof upClear === 'function') upClear(); ytOn = false; ytPlaying = false; try { yt && yt.stopVideo(); } catch (e) {} }   // bumping the token cancels any YouTube start that is still loading
 
   const isUP = s => s && typeof s[1] === 'string' && s[1].startsWith('web:');
 
@@ -574,8 +577,9 @@
     try { MS.setActionHandler('nexttrack', null); MS.setActionHandler('previoustrack', null); } catch (e) {}
   }
   function play(s, fly) {
+    stopWatch();
     if (isBL(s)) { audio.pause(); if (hls) { hls.destroy(); hls = null; } current = s; detail(s); $('shareBtn').disabled = false; setPlayerLogo(s); $('pplay').disabled = false; ytStart('bl'); pulseT = performance.now(); if (fly) flyTo(s); return; }
-    ytStop();
+    ytStop(); stopWatch();
     if (isUP(s)) { audio.pause(); if (hls) { hls.destroy(); hls = null; } current = s; detail(s); $('shareBtn').disabled = false; $('pname').textContent = s[0]; $('pmeta').textContent = 'Tuning in…'; setPlayerLogo(s); $('pplay').disabled = false; ytStart('up'); pulseT = performance.now(); if (fly) flyTo(s); return; }
     if (!s[1]) {
       current = s; detail(s); $('shareBtn').disabled = false; $('pname').textContent = s[0]; setPlayerLogo(s); $('pplay').disabled = true;
@@ -619,6 +623,12 @@
   const lsAdd = (k, v, cap) => { try { const l = lsGet(k).filter(x => x !== v); l.push(v); localStorage.setItem(k, JSON.stringify(l.slice(-cap))); } catch (e) {} };
   const fastOK = s => s[1] && typeof s[1] === 'string' && /^https:/i.test(s[1]) && !/\.(m3u8|pls|m3u)(\?|$)/i.test(s[1]) && (!s[6] || /^(MP3|AAC\+?)$/i.test(s[6]));   // https + direct MP3/AAC connects fastest (http streams are often blocked on an https page)
   const markBad = s => lsAdd('rg-bad', s[13], 300);
+  // one sound at a time: whatever just started playing silences every other source (YouTube radios, live-set video, other open tabs of this site)
+  let bc = null; try { bc = new BroadcastChannel('rg-player'); } catch (e) {}
+  const tabId = Math.random().toString(36).slice(2);
+  const announce = () => { try { bc && bc.postMessage(tabId); } catch (e) {} };
+  if (bc) bc.onmessage = e => { if (e.data !== tabId) { try { audio.pause(); } catch (x) {} if (ytOn) { try { yt.pauseVideo(); } catch (x) {} } } };
+  audio.addEventListener('playing', () => { if (ytOn) ytStop(); stopWatch(); announce(); });
   audio.addEventListener('playing', () => { clearTimeout(wdT); startElec = null; if (current && current[1]) { lsAdd('rg-good', current[13], 80); if (fastOK(current)) { try { const l = lsGet('rg-fast').filter(x => x[0] !== current[13]); l.push([current[13], current[1]]); localStorage.setItem('rg-fast', JSON.stringify(l.slice(-25))); } catch (e) {} } } });
   // give up on a station that has not produced sound in 3.5 s and try another straight away
   function watchdog(s) {
