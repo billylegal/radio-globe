@@ -1006,17 +1006,36 @@
     const t = current === s ? np.title : ''; 
     if (!t) { toast(np.dead.has(s[13]) ? "This station doesn't share song titles" : 'No song title right now — try again in a moment'); return; }
     if (songs.some(x => x.t === t && x.sid === s[13])) { toast('Already saved'); return; }
-    songs.unshift({ t, st: s[0], sid: s[13], cc: s[12] || '', ts: Date.now(), vid: current === s ? np.vid : '' }); saveSongs(); toast('🎵 Saved: ' + t); if (!$('songs').classList.contains('hidden')) renderSongs();
+    songs.unshift({ t, st: s[0], sid: s[13], cc: s[12] || '', ts: Date.now(), vid: current === s ? np.vid : '' }); saveSongs(); toast('🎵 Saved: ' + t); lookupMissing(); if (!$('songs').classList.contains('hidden')) renderSongs();
   }
   $('saveSong').onclick = saveSong;
   const q = encodeURIComponent;
+  // ---- which music services carry a saved song (Apple Music via iTunes search, Deezer via its search API; both free, no account) ----
+  const swords = t => (t || '').toLowerCase().replace(/\(.*?\)|\[.*?\]/g, ' ').replace(/\b(feat|ft|featuring|remaster(ed)?|radio edit|original mix|mix|version|edit|official|video|audio|lyrics?)\b/g, ' ').replace(/[^\p{L}\p{N}]+/gu, ' ').trim().split(' ').filter(Boolean);
+  function sameSong(saved, cand) { const a = swords(saved), b = swords(cand); if (!a.length || !b.length) return false; const hitA = a.filter(x => b.includes(x)).length / a.length, hitB = b.filter(x => a.includes(x)).length / b.length; return hitA >= 0.8 && hitB >= 0.5; }
+  const jsonp = u => new Promise(res => { const cb = 'rgjp' + Math.random().toString(36).slice(2), s = document.createElement('script'); const done = d => { clearTimeout(tm); delete window[cb]; s.remove(); res(d); }; const tm = setTimeout(() => done(null), 7000); window[cb] = done; s.onerror = () => done(null); s.src = u + '&output=jsonp&callback=' + cb; document.head.appendChild(s); });
+  async function findLinks(title) {
+    const plain = title.replace(/\s+-\s+/, ' '), links = {}; let ok = false;
+    try { const r = await (await fetch('https://itunes.apple.com/search?media=music&entity=song&limit=6&term=' + q(plain))).json(); ok = true; const m = (r.results || []).find(x => sameSong(title, x.artistName + ' ' + x.trackName)); if (m) links.apple = m.trackViewUrl.replace(/[?&]uo=\d+/, ''); } catch (e) {}
+    try { const d = await jsonp('https://api.deezer.com/search?limit=6&q=' + q(plain)); if (d && d.data) { ok = true; const m = d.data.find(x => sameSong(title, x.artist.name + ' ' + (x.title_short || x.title))); if (m) links.deezer = m.link; } } catch (e) {}
+    return ok ? links : null;   // null = could not reach the services (try again later)
+  }
+  let lookingUp = false;
+  async function lookupMissing() {
+    if (lookingUp) return; lookingUp = true;
+    try { for (const x of songs.slice()) { if (x.links) continue; const l = await findLinks(x.t); if (l) { x.links = l; saveSongs(); if (!$('songs').classList.contains('hidden')) renderSongs(); } await new Promise(r => setTimeout(r, 500)); } } finally { lookingUp = false; }
+  }
   function renderSongs() {
     $('songsCount').textContent = songs.length;
     $('songsList').innerHTML = songs.length ? songs.map((x, i) => '<div class="srow" data-i="' + i + '"><div class="st"><div class="sn">' + esc(x.t) + '</div><div class="sm">' + esc([x.st, x.cc, new Date(x.ts).toLocaleDateString()].filter(Boolean).join(' · ')) + '</div>' +
-      '<div class="sa"><a href="' + (x.vid ? 'https://www.youtube.com/watch?v=' + x.vid : 'https://www.youtube.com/results?search_query=' + q(x.t)) + '" target="_blank" rel="noopener">▶ YouTube</a><a href="https://open.spotify.com/search/' + q(x.t) + '" target="_blank" rel="noopener">Spotify</a><a href="https://music.apple.com/search?term=' + q(x.t) + '" target="_blank" rel="noopener">Apple</a><button data-a="tune">📻 Station</button></div></div>' +
+      '<div class="sa"><a href="' + (x.vid ? 'https://www.youtube.com/watch?v=' + x.vid : 'https://www.youtube.com/results?search_query=' + q(x.t)) + '" target="_blank" rel="noopener">▶ YouTube</a>' +
+      (x.links && x.links.apple ? '<a class="found" href="' + esc(x.links.apple) + '" target="_blank" rel="noopener"> Apple Music</a>' : '') + (x.links && x.links.deezer ? '<a class="found" href="' + esc(x.links.deezer) + '" target="_blank" rel="noopener">Deezer</a>' : '') +
+      '<a class="srch" href="https://open.spotify.com/search/' + q(x.t) + '" target="_blank" rel="noopener" title="Search Spotify">Spotify ⌕</a><a class="srch" href="https://music.youtube.com/search?q=' + q(x.t) + '" target="_blank" rel="noopener" title="Search YouTube Music">YT Music ⌕</a><a class="srch" href="https://music.amazon.com/search/' + q(x.t) + '" target="_blank" rel="noopener" title="Search Amazon Music">Amazon ⌕</a><a class="srch" href="https://listen.tidal.com/search?q=' + q(x.t) + '" target="_blank" rel="noopener" title="Search Tidal">Tidal ⌕</a>' +
+      (x.links ? (x.links.apple || x.links.deezer ? '' : '<span class="snf">not found on Apple Music or Deezer</span>') : '<span class="snf">checking Apple Music &amp; Deezer…</span>') + '<button data-a="tune">📻 Station</button></div></div>' +
       '<button class="sdel" data-a="del" title="Remove">✕</button></div>').join('') : '<div class="fempty">No songs saved yet.<br>Tap 🎵 in the player bar while a song with a title is playing.</div>';
   }
-  const songsOpen = on => { $('songs').classList.toggle('hidden', !on); $('songsTop').classList.toggle('on', on); if (on) renderSongs(); };
+  const songsOpen = on => { $('songs').classList.toggle('hidden', !on); $('songsTop').classList.toggle('on', on); if (on) { renderSongs(); lookupMissing(); } };
+  setTimeout(() => { if (songs.some(x => !x.links)) lookupMissing(); }, 4000);
   $('songsTop').onclick = () => songsOpen($('songs').classList.contains('hidden'));
   $('songsClose').onclick = () => songsOpen(false);
   $('songsCopy').onclick = () => { if (songs.length) copy(songs.map(x => x.t + '  [' + x.st + (x.cc ? ', ' + x.cc : '') + ']').join('\n'), 'Song list'); };

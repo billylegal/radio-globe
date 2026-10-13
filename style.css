@@ -365,3 +365,7 @@ button,input,select,label{touch-action:manipulation}
   #player{grid-template-areas:"logo info info info info save" "fav share rnd vi vol play"!important}
   #saveSong{grid-area:save;display:grid!important}
 }
+
+.sa a.found{background:var(--acc);color:var(--acc-ink,#000);border-color:var(--acc);font-weight:700}
+.sa a.srch{opacity:.65;border-style:dashed}
+.snf{font-size:11px;color:var(--dim);align-self:center}
