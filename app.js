@@ -325,6 +325,7 @@
     updateReticle();
   }
   function settle() {
+    if (locked) { dragMoved = false; return; }   // locked: no snapping onto a dot, no station change
     if (!dragMoved || drag || snapping || roloOn) return;
     autoPick = centerPick();
     if (!autoPick || autoPick.d > SNAP_R()) { dragMoved = false; return; }
@@ -537,16 +538,17 @@
     };
     requestAnimationFrame(satTick); }
 
-  // ---------- Lock: freeze the Earth on this station; nothing on the globe/menus moves until you unlock ----------
+  // ---------- Lock: the MUSIC is locked (no station change from Random, clicks, searches, snapping, Social Live...); spin and zoom the globe freely ----------
   let locked = false;
+  window.__t = { pov: () => globe.pointOfView(), locked: () => locked }; // DEBUG-REMOVE
+  const lockMsg = () => toast('🔒 Music is locked · tap 🔒 to unlock');
   function setLock(on) {
-    locked = on; document.body.classList.toggle('locked', on); const b = $('lockBtn'); b.textContent = on ? '🔒' : '🔓'; b.classList.toggle('on', on); b.title = on ? 'Unlock the Earth' : 'Lock the Earth on this station';
-    if (on) {
-      stopFling(); ctl.autoRotate = false; autoRotate = false; $('rotate').style.opacity = .5; clearTimeout(snapT); dragMoved = false; drag = false; tip.classList.add('hidden');
-      if (current && current[2] != null) { const pov = globe.pointOfView(), dl = ((((current[3] - pov.lng) % 360) + 540) % 360) - 180; ctl.enableDamping = false; globe.pointOfView({ lat: current[2], lng: pov.lng + dl, altitude: pov.altitude }, 800); setTimeout(() => { ctl.enableDamping = true; }, 850); }
-      toast('🔒 Locked on ' + (current ? current[0] : 'this view') + ' · tap 🔒 to unlock');
-    } else toast('🔓 Unlocked');
+    locked = on; document.body.classList.toggle('locked', on); const b = $('lockBtn'); b.textContent = on ? '🔒' : '🔓'; b.classList.toggle('on', on); b.title = on ? 'Music locked: tap to unlock' : 'Lock the music (you can still spin the globe)';
+    toast(on ? '🔒 Music locked' + (current ? ' on ' + current[0] : '') + ' · you can still spin and zoom' : '🔓 Unlocked');
   }
+  // the lock button floats just above the Save song button, nearly see-through
+  const placeLock = () => { const sv = $('saveSong'), b = $('lockBtn'); if (!sv || !b) return; const r = sv.getBoundingClientRect(); if (!r.width) return; b.style.left = Math.round(r.left + r.width / 2 - b.offsetWidth / 2) + 'px'; b.style.top = Math.round(r.top - b.offsetHeight - 6) + 'px'; };
+  { const pl = $('player'); try { new ResizeObserver(placeLock).observe(pl); } catch (e) {} addEventListener('resize', placeLock); setInterval(placeLock, 1000); placeLock(); }
   $('lockBtn').onclick = () => setLock(!locked);
 
   // ---------- Live now: DJ sets streaming right now + tonight's events ----------
@@ -579,6 +581,7 @@
   const matchQ = (q, ...parts) => { const h = fold(parts.filter(Boolean).join(' ')); return fold(q).split(' ').filter(Boolean).every(t => h.includes(t)); };
   // switching platform tabs tunes straight into a random live stream of THAT platform (and stops the previous one)
   function autoWatch(tab) {
+    if (locked) { renderLive(); return; }
     const pool = (tab === 'tw' ? socOf('twitch') : tab === 'kick' ? socOf('kick') : tab === 'yt' ? ytLive().filter(r => !liveFam || (r.fam || []).includes(liveFam)).sort((x, y) => (y.views || 0) - (x.views || 0)) : []).slice(0, 30);
     const busy = pool.filter(r => (r.viewers || r.views || 0) >= 3); if (busy.length >= 5) { pool.length = 0; pool.push(...busy); }   // prefer streams people are actually watching
     const cur = watching && (watching.src || 'youtube') + ':' + watching.id;
@@ -639,6 +642,7 @@
   };
   function stopWatch() { if (!watching) return; watching = null; const lw = $('livewatch'); if (lw) lw.innerHTML = ''; }
   function liveWatch(r) {
+    if (locked) { lockMsg(); return; }
     audio.pause(); if (hls) { hls.destroy(); hls = null; } ytStop(); $('pplay').textContent = '▶';
     watching = r; if (djOpen) renderDJMixes(); else openLive(liveTab);
     if (r.lat != null) { ctl.autoRotate = false; autoRotate = false; globe.pointOfView({ lat: r.lat, lng: r.lon, altitude: 0.5 }, 1200); }
@@ -973,6 +977,7 @@
     try { MS.setActionHandler('nexttrack', null); MS.setActionHandler('previoustrack', null); } catch (e) {}
   }
   function play(s, fly) {
+    if (locked && current && s && s[13] !== current[13]) { lockMsg(); return; }   // the music is locked on this station
     stopWatch(); try { lyrReset(); } catch (e) {}
     if (isBL(s)) { audio.pause(); if (hls) { hls.destroy(); hls = null; } current = s; detail(s); $('shareBtn').disabled = false; setPlayerLogo(s); $('pplay').disabled = false; ytStart('bl'); pulseT = performance.now(); if (fly) flyTo(s); return; }
     ytStop(); stopWatch();
@@ -1045,7 +1050,7 @@
   audio.addEventListener('stalled', () => { if (audio.readyState < 3) $('pmeta').textContent = 'Buffering…'; });
   const prevPlayClick = $('pplay').onclick = () => { if (Date.now() - lastUnmute < 600) return; if (ytOn && yt && yt.getPlayerState) { ytPlaying ? yt.pauseVideo() : yt.playVideo(); return; } if (!current) return; audio.paused ? audio.play().catch(failed) : audio.pause(); };
   function randomStation() {
-    if (locked) return; if (!shown.length) return; randomMode = true;
+    if (locked) { lockMsg(); return; } if (!shown.length) return; randomMode = true;
     const bad = new Set(lsGet('rg-bad')); let pool = shown.filter(x => x[1]); if (!pool.length) return;
     const fast = pool.filter(x => fastOK(x) && !bad.has(x[13])); if (fast.length > 20) pool = fast;
     let s, t = 0; do { s = pool[(Math.random() * pool.length) | 0]; } while (s === current && ++t < 5);
@@ -1110,7 +1115,7 @@
   }
   addEventListener('keydown', e => {
     if (/INPUT/.test(document.activeElement.tagName)) return;
-    if (locked && e.code !== 'Space') return;   // locked: only play / pause works
+    if (locked && (e.key === 'n' || e.key === 'N')) return;   // locked: no random station
     if (e.key === 'n' || e.key === 'N') $('random').click();
     if (e.key === 'f' || e.key === 'F') toggleDrawer();
     if ((e.key === 'z' || e.key === 'Z') && current) zoomTo(current);
