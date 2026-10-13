@@ -397,3 +397,8 @@ button,input,select,label{touch-action:manipulation}
 
 .lgo{display:inline-block;margin-top:8px;padding:7px 12px;border-radius:999px;border:1px solid var(--acc);color:var(--acc);text-decoration:none;font-weight:700;font-size:13px}
 .lwt .lgo{margin:0 6px 0 auto;padding:2px 8px}
+
+.adddj{display:flex;flex-wrap:wrap;gap:6px;padding:12px 14px;align-items:center}.adddj b{flex:1 0 100%;font-size:12px;color:var(--dim)}
+.adddj input{flex:1 1 90px;min-width:0;background:rgba(255,255,255,.07);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:7px 9px;font:500 13px system-ui}
+.adddj button{background:var(--acc);color:var(--acc-ink,#04121c);border:0;border-radius:8px;padding:7px 14px;font-weight:800;cursor:pointer}
+.mixrow{cursor:default}.mixrow .sa{margin-top:2px}
