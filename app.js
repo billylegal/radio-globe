@@ -884,7 +884,7 @@
     }
     return { spinTo, isOpen: () => open, refresh() { if (open) { src = null; build(); size(); goTo(0, false); render(); } else src = null; }, toggle };
   })();
-  try { if (localStorage.getItem('rg-rolo') === '1') rolo.toggle(true); } catch (e) {}
+  { let pref = null; try { pref = localStorage.getItem('rg-rolo'); } catch (e) {} if (pref === '1' || (pref === null && innerWidth <= 820)) rolo.toggle(true); }   // phones start on the Rolodex unless you last left it elsewhere
   { const af = applyFilter; applyFilter = function () { af.apply(this, arguments); rolo.refresh(); }; }
   // ---------- genre sidebar ----------
   const fams = [...new Set(G.map(g => g.family))];
