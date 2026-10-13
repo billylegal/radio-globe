@@ -100,9 +100,9 @@
 
   // ---------- "Ghost" view: no globe, only the station dots ----------
   const TILE_URL = (x, y, l) => 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/' + l + '/' + y + '/' + x;
-  let spaced = false;
+  let spaced = false, roloOn = false;
   function setSpaced(on, save) {
-    spaced = on; $('spaceBtn').classList.toggle('on', on); $('spaceBtn').style.opacity = 1; $('spaceBtn').textContent = on ? '🌍 Earth' : 'Ghost'; $('spaceBtn').title = on ? 'Back to the Earth view' : 'Ghost: hide the globe, show only the station dots';
+    spaced = on; $('spaceBtn').classList.toggle('on', on); $('spaceBtn').style.opacity = 1; $('spaceBtn').textContent = roloOn ? '🎞 Rolodex' : on ? '👻 Ghost' : '🌍 Earth'; $('spaceBtn').title = 'View: Earth, Ghost or Rolodex (tap to switch)';
     if (save) { try { localStorage.setItem('rg-spaced', on ? '1' : '0'); } catch (e) {} }
     if (on) {
       try { globe.globeMaterial().visible = false; } catch (e) {}
@@ -467,6 +467,7 @@
   const sideOpen = on => { $('side').classList.toggle('open', on); $('sideScrim').classList.toggle('on', on); };
   $('menuBtn').onclick = () => sideOpen(!$('side').classList.contains('open'));
   $('sideScrim').onclick = () => sideOpen(false);
+  $('sideClose').onclick = () => sideOpen(false);
   $('genres').addEventListener('click', e => { if (innerWidth <= 820 && e.target.closest('[data-g]')) setTimeout(() => sideOpen(false), 150); });
   $('bands').addEventListener('click', e => { if (innerWidth <= 820 && e.target.closest('.chip') && !e.target.closest('[data-b="fav"]')) setTimeout(() => sideOpen(false), 150); });
   $('shareBtn').onclick = () => share(current);
@@ -612,6 +613,7 @@
     if (!shown.length) return; randomMode = true;
     const pool = shown.filter(x => x[1]); if (!pool.length) return;
     let s, t = 0; do { s = pool[(Math.random() * pool.length) | 0]; } while (s === current && ++t < 5);
+    if (roloOn) { rolo.spinTo(s, () => play(s, false)); return; }
     play(s, true); openPanel([s], s[0], s[12] || '');
   }
   $('random').onclick = () => { randomMode = true; tries = 0; randomStation(); };
@@ -625,7 +627,7 @@
   document.querySelector('#player .info').addEventListener('click', toggleInfo); $('plogo').addEventListener('click', toggleInfo);
   $('randomBar').onclick = () => $('random').click();
   $('rotate').onclick = () => { autoRotate = !autoRotate; ctl.autoRotate = autoRotate; $('rotate').style.opacity = autoRotate ? 1 : .5; };
-  $('spaceBtn').onclick = () => setSpaced(!spaced, true);
+  $('spaceBtn').onclick = () => { if (roloOn) { rolo.toggle(false); setSpaced(false, true); } else if (spaced) rolo.toggle(true); else setSpaced(true, true); };   // Earth -> Ghost -> Rolodex -> Earth
   // ---------- always open in Ghost view with 1UP Radio playing ----------
   setSpaced(true);
   {
@@ -838,7 +840,7 @@
       const l = keyL[Math.max(0, Math.min(list.length - 1, Math.round(c)))];
       az.querySelectorAll('span.on').forEach(e => e.classList.remove('on')); const t = az.querySelector('[data-l="' + l + '"]'); if (t) t.classList.add('on');
     }
-    function size() { H = innerWidth <= 820 ? 72 : 80; VH = sc.clientHeight || 400; sp.style.height = Math.max(1, list.length * H + VH - H) + 'px'; }
+    function size() { VH = sc.clientHeight || 400; H = innerWidth <= 820 ? 70 : 80; if (VH < 380) H -= 14; el.style.setProperty('--rh', (H - 10) + 'px'); sp.style.height = Math.max(1, list.length * H + VH - H) + 'px'; }
     const goTo = (i, smooth) => { i = Math.max(0, Math.min(list.length - 1, i)); snapping = true; sc.scrollTo({ top: i * H, behavior: smooth ? 'smooth' : 'auto' }); setTimeout(() => snapping = false, smooth ? 400 : 30); };
     sc.addEventListener('scroll', () => {
       render(); if (snapping) return; clearTimeout(snapT);
@@ -858,19 +860,31 @@
     az.addEventListener('pointermove', e => { if (az.hasPointerCapture(e.pointerId)) jump(e); });
     az.addEventListener('pointerup', () => { bub.classList.remove('on'); });
     az.addEventListener('pointercancel', () => { bub.classList.remove('on'); });
-    addEventListener('resize', () => { if (open) { size(); render(); } });
+    const onResize = () => { if (!open) return; const i = Math.round(sc.scrollTop / H); size(); sc.scrollTop = i * H; render(); };
+    addEventListener('resize', onResize); try { new ResizeObserver(onResize).observe(el); } catch (e) {}
     audio.addEventListener('playing', () => render());
+    let lastTouch = 0; ['pointerdown', 'wheel', 'touchstart'].forEach(ev => sc.addEventListener(ev, () => { lastTouch = Date.now(); }, { passive: true }));
+    audio.addEventListener('loadstart', () => { if (open && !snapping && Date.now() - lastTouch > 4000 && current) { const i = list.indexOf(current); if (i >= 0) goTo(i, true); } });
     function toggle(on) {
       open = on === undefined ? !open : on;
-      el.classList.toggle('hidden', !open); $('roloBtn').classList.toggle('on', open); document.body.classList.toggle('rolo-on', open);
+      try { localStorage.setItem('rg-rolo', open ? '1' : '0'); } catch (e) {}
+      el.classList.toggle('hidden', !open); roloOn = open; setSpaced(open ? true : spaced); document.body.classList.toggle('rolo-on', open);
       if (!open) return;
       $('panel').classList.add('hidden'); build(); size(); sp.style.height = Math.max(1, list.length * H + VH - H) + 'px';
       const i = current ? list.indexOf(current) : -1; goTo(i >= 0 ? i : 0, false); render();
     }
-    $('roloBtn').onclick = () => toggle();
     addEventListener('keydown', e => { if (!open || /INPUT/.test(document.activeElement.tagName)) return; if (e.key === 'Escape') toggle(false); if (e.key === 'ArrowDown') { goTo(Math.round(sc.scrollTop / H) + 1, true); e.preventDefault(); } if (e.key === 'ArrowUp') { goTo(Math.round(sc.scrollTop / H) - 1, true); e.preventDefault(); } if (e.key === 'Enter') { const s = list[Math.round(sc.scrollTop / H)]; if (s) play(s, false); } });
-    return { refresh() { if (open) { src = null; build(); size(); goTo(0, false); render(); } else src = null; }, toggle };
+    // Random while in the Rolodex: spin the wheel down to the chosen station, then play it
+    function spinTo(s, done) {
+      build(); const i = list.indexOf(s); if (i < 0) { done(); return; }
+      const from = sc.scrollTop, to = i * H, t0 = performance.now(), dur = Math.min(2200, 900 + Math.abs(to - from) / H * 6);
+      snapping = true; clearTimeout(snapT);
+      const step = now => { const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3); sc.scrollTop = from + (to - from) * e; if (k < 1) requestAnimationFrame(step); else { snapping = false; render(); done(); } };
+      requestAnimationFrame(step);
+    }
+    return { spinTo, isOpen: () => open, refresh() { if (open) { src = null; build(); size(); goTo(0, false); render(); } else src = null; }, toggle };
   })();
+  try { if (localStorage.getItem('rg-rolo') === '1') rolo.toggle(true); } catch (e) {}
   { const af = applyFilter; applyFilter = function () { af.apply(this, arguments); rolo.refresh(); }; }
   // ---------- genre sidebar ----------
   const fams = [...new Set(G.map(g => g.family))];
