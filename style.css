@@ -394,3 +394,6 @@ button,input,select,label{touch-action:manipulation}
 #specials .spbtn{background:rgba(255,255,255,.07);border:1px solid var(--line);color:var(--txt);font-weight:700}
 #specials .spbtn:hover{border-color:var(--acc)}#specials .spbtn.on{background:var(--acc);color:var(--acc-ink,#04121c);border-color:var(--acc)}
 #specials #livebtn{flex:1 1 100%}
+
+.lgo{display:inline-block;margin-top:8px;padding:7px 12px;border-radius:999px;border:1px solid var(--acc);color:var(--acc);text-decoration:none;font-weight:700;font-size:13px}
+.lwt .lgo{margin:0 6px 0 auto;padding:2px 8px}

@@ -412,49 +412,59 @@
   });
 
   // ---------- Live now: DJ sets streaming right now + tonight's events ----------
-  let liveData = { items: [] }, evData = { items: [] }, liveItems = [], evItems = [], liveTab = 'feat', liveOpen = false, watching = null, liveFam = '';
+  let liveData = { items: [] }, socialData = { items: [] }, evData = { items: [] }, liveItems = [], evItems = [], liveTab = 'yt', liveOpen = false, watching = null, liveFam = '';
   async function loadLive() {
     try { liveData = await (await fetch('data/live.json?t=' + Date.now())).json(); } catch (e) {}
     try { evData = await (await fetch('data/events.json?t=' + Date.now())).json(); } catch (e) {}
+    try { socialData = await (await fetch('data/social.json?t=' + Date.now())).json(); } catch (e) {}
     liveItems = (liveData.items || []).filter(r => r.lat != null && (!liveFam || (r.fam || []).includes(liveFam))).map(r => Object.assign({ lng: r.lon }, r)); evItems = evData.items || [];
-    const n = (liveData.items || []).filter(r => r.kind === 'live').length; $('livecount').textContent = n || ''; $('livebtn').title = 'Live right now: ' + n + ' · updated ' + (liveData.updated ? ago(liveData.updated) : '—'); dirty = true;
+    const n = ytLive().length + (socialData.items || []).length; $('livecount').textContent = n || ''; $('livebtn').title = 'Social live right now: ' + n + ' · updated ' + (liveData.updated ? ago(liveData.updated) : '—'); dirty = true;
     if (liveOpen) { const st = $('plist').scrollTop; renderLive(); $('plist').scrollTop = st; }
   }
+  const ytLive = () => (liveData.items || []).filter(r => r.kind === 'live' && !r.ai);   // only streams that are LIVE right now (no 24/7 loops, AI, scheduled or ended)
   function loadLiveFilter() { liveItems = (liveData.items || []).filter(r => r.lat != null && (!liveFam || (r.fam || []).includes(liveFam))).map(r => Object.assign({ lng: r.lon }, r)); dirty = true; }
   setInterval(loadLive, 30 * 1000);
   function ago(ts) { const m = Math.max(0, Math.round((Date.now() / 1000 - ts) / 60)); return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : Math.round(m / 60) + ' h ago'; }
   function openLive(tab) { if (tab) liveTab = tab; liveOpen = true; renderLive(); $('panel').classList.remove('hidden'); }
   function famOfFilter() { return filter.kind === 'family' ? filter.fam : filter.kind === 'genre' ? G[filter.id].family : ''; }   // (no longer drives the Live list)
+  const SRC = { yt: ['YouTube', 'https://www.youtube.com/live'], tw: ['Twitch', 'https://www.twitch.tv/directory/category/music'], kick: ['Kick', 'https://kick.com/categories/music'], tt: ['TikTok', 'https://www.tiktok.com/live'], ig: ['Instagram', 'https://www.instagram.com/'] };
+  const socOf = k => (socialData.items || []).filter(r => r.src === k).sort((x, y) => (y.viewers || 0) - (x.viewers || 0));
   function renderLive() {
-    const up = (liveData.upcoming || []), all = (liveData.items || []), rec = (liveData.recent || []);
     const inFam = r => !liveFam || (r.fam || []).includes(liveFam);
-    const byViews = (x, y) => (y.views || 0) - (x.views || 0);
-    const feat = all.filter(r => r.dj && inFam(r)).sort((x, y) => (x.kind === 'live' ? 0 : 1) - (y.kind === 'live' ? 0 : 1) || byViews(x, y));
-    const real = all.filter(r => r.kind === 'live' && !r.ai && !r.dj && inFam(r)).sort(byViews);
-    const loops = all.filter(r => r.kind !== 'live' && !r.ai && !r.dj && inFam(r)).sort(byViews);
-    const ai = all.filter(r => r.ai && inFam(r)).sort(byViews);
-    const soon = up.filter(inFam), recs = rec.filter(inFam);
-    const famCount = {}; for (const r of all) for (const f of (r.fam || [])) famCount[f] = (famCount[f] || 0) + 1;
-    $('ptitle').textContent = '🔴 Live now'; $('psub').textContent = 'Updated ' + (liveData.updated ? ago(liveData.updated) : '—');
+    const yt = ytLive(), ytShown = yt.filter(inFam).sort((x, y) => (y.views || 0) - (x.views || 0));
+    const tw = socOf('twitch'), kk = socOf('kick');
+    const famCount = {}; for (const r of yt) for (const f of (r.fam || [])) famCount[f] = (famCount[f] || 0) + 1;
+    const tot = yt.length + tw.length + kk.length;
+    $('ptitle').textContent = '🔴 Social live'; $('psub').textContent = tot + ' live right now · updated ' + (liveData.updated ? ago(Math.max(liveData.updated, socialData.updated || 0)) : '—');
     $('pdetail').classList.remove('hidden');
     const tab = (k, l, n) => '<button data-lt="' + k + '" class="' + (liveTab === k ? 'on' : '') + '">' + l + '<b>' + n + '</b></button>';
-    $('pdetail').innerHTML = '<div class="ltabs">' + tab('feat', 'Featured', feat.length) + tab('sets', 'Live', real.length) + tab('loops', '24/7', loops.length) + tab('ai', 'AI', ai.length) + tab('soon', 'Soon', soon.length + recs.length) + '</div>' +
-      '<select id="lfsel" class="lfsel"><option value="">All genres</option>' + Object.entries(famCount).sort((a, b) => b[1] - a[1]).map(([f, n]) => '<option value="' + esc(f) + '"' + (liveFam === f ? ' selected' : '') + '>' + esc(f) + ' (' + n + ')</option>').join('') + '</select>' +
+    $('pdetail').innerHTML = '<div class="ltabs">' + tab('yt', 'YouTube', yt.length) + tab('tw', 'Twitch', tw.length) + tab('kick', 'Kick', kk.length) + tab('tt', 'TikTok', '↗') + tab('ig', 'Insta', '↗') + '</div>' +
+      (liveTab === 'yt' ? '<select id="lfsel" class="lfsel"><option value="">All genres</option>' + Object.entries(famCount).sort((a, b) => b[1] - a[1]).map(([f, n]) => '<option value="' + esc(f) + '"' + (liveFam === f ? ' selected' : '') + '>' + esc(f) + ' (' + n + ')</option>').join('') + '</select>' : '') +
       '<div id="livewatch">' + (watching ? watchHTML(watching) : '') + '</div>';
-    const rowOf = (r, extra) => '<div class="row lrow" data-v="' + esc(r.id) + '"><img class="lth" loading="lazy" src="https://i.ytimg.com/vi/' + esc(r.id) + '/mqdefault.jpg" onerror="this.style.visibility=\'hidden\'"><div class="t"><div class="n">' + esc(r.title) + '</div><div class="m">' + esc([r.dj || r.channel, extra, r.views ? r.views.toLocaleString() + ' watching' : '', r.place].filter(Boolean).join(' · ')) + '</div></div></div>';
+    const rowOf = r => {
+      const src = r.src || 'youtube', th = src === 'youtube' ? 'https://i.ytimg.com/vi/' + esc(r.id) + '/mqdefault.jpg' : esc(r.thumb || '');
+      const m = [r.dj || r.channel, (src === 'youtube' ? r.views : r.viewers) ? (src === 'youtube' ? r.views : r.viewers).toLocaleString() + ' watching' : '', src === 'youtube' ? r.place : [r.cat, r.lang].filter(Boolean).join(' · ')].filter(Boolean).join(' · ');
+      return '<div class="row lrow" data-v="' + esc(src + ':' + r.id) + '"><img class="lth" loading="lazy" src="' + th + '" onerror="this.style.visibility=\'hidden\'"><div class="t"><div class="n">' + esc(r.title) + '</div><div class="m">' + esc(m) + '</div></div></div>';
+    };
     const empty = m => '<div class="lempty">' + m + '</div>';
     let rows = '';
-    if (liveTab === 'soon') {
-      rows = soon.map(u => '<div class="row lrow" data-v="' + esc(u.id) + '"><img class="lth" loading="lazy" src="https://i.ytimg.com/vi/' + esc(u.id) + '/mqdefault.jpg" onerror="this.style.visibility=\'hidden\'"><div class="t"><div class="n">' + esc(u.title) + '</div><div class="m">⏰ ' + esc(new Date(u.start * 1000).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' · ' + u.channel) + '</div></div></div>').join('');
-      rows += recs.map(r => rowOf(r, 'ended ' + ago(r.last_seen))).join('');
-      if (!rows) rows = empty('Nothing scheduled or recently ended yet.');
+    if (liveTab === 'tt' || liveTab === 'ig') {
+      const [name, url] = SRC[liveTab];
+      rows = empty('<b>' + name + ' LIVE</b> has no public list of who is streaming right now, so it can’t be shown here the way the others are.<br>Open it directly:<br><a class="lgo" href="' + url + '" target="_blank" rel="noopener">Open ' + name + (liveTab === 'tt' ? ' LIVE ↗' : ' (live shows in the Stories bar) ↗') + '</a>');
     } else {
-      const list = { feat, sets: real, loops, ai }[liveTab] || real;
-      rows = list.length ? list.slice(0, 120).map(r => rowOf(r, r.kind !== 'live' && liveTab === 'feat' ? '24/7' : '')).join('') : empty(liveTab === 'feat' ? 'No featured DJs or festivals are live right now.' : 'Nothing here right now.');
+      const list = liveTab === 'tw' ? tw : liveTab === 'kick' ? kk : ytShown;
+      rows = list.length ? list.slice(0, 150).map(rowOf).join('') : empty('Nobody ' + (liveTab === 'yt' && liveFam ? 'in this genre ' : '') + 'is live here right now.');
     }
     $('plist').innerHTML = rows; panelList = [];
   }
-  const watchHTML = r => '<div class="lw"><iframe src="https://www.youtube-nocookie.com/embed/' + esc(r.id) + '?autoplay=1&rel=0&modestbranding=1" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe><div class="lwt"><span>' + esc(r.title) + '</span><button id="lwstop" title="Stop watching">✕</button></div></div>';
+  const watchHTML = r => {
+    const src = r.src || 'youtube', host = location.hostname || 'localhost';
+    const url = src === 'twitch' ? 'https://player.twitch.tv/?channel=' + encodeURIComponent(r.id) + '&parent=' + encodeURIComponent(host) + '&autoplay=true'
+      : src === 'kick' ? 'https://player.kick.com/' + encodeURIComponent(r.id) + '?autoplay=true'
+      : 'https://www.youtube-nocookie.com/embed/' + encodeURIComponent(r.id) + '?autoplay=1&rel=0&modestbranding=1';
+    const page = src === 'twitch' ? 'https://www.twitch.tv/' + encodeURIComponent(r.id) : src === 'kick' ? 'https://kick.com/' + encodeURIComponent(r.id) : 'https://www.youtube.com/watch?v=' + encodeURIComponent(r.id);
+    return '<div class="lw"><iframe src="' + url + '" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe><div class="lwt"><span>' + esc(r.title) + '</span><a class="lgo" href="' + page + '" target="_blank" rel="noopener" title="Open on ' + esc({ twitch: 'Twitch', kick: 'Kick' }[src] || 'YouTube') + '">↗</a><button id="lwstop" title="Stop watching">✕</button></div></div>';
+  };
   function stopWatch() { if (!watching) return; watching = null; const lw = $('livewatch'); if (lw) lw.innerHTML = ''; }
   function liveWatch(r) {
     audio.pause(); if (hls) { hls.destroy(); hls = null; } ytStop(); $('pplay').textContent = '▶';
@@ -468,7 +478,7 @@
   $('pdetail').addEventListener('change', e => { if (e.target.id === 'lfsel') { liveFam = e.target.value; loadLiveFilter(); renderLive(); } });
   $('plist').addEventListener('click', e => {
     if (!liveOpen) return;
-    const v = e.target.closest('[data-v]'); if (v) { const r = (liveData.items || []).concat(liveData.upcoming || [], liveData.recent || []).find(x => x.id === v.dataset.v); if (r) liveWatch(Object.assign({ kind: 'live' }, r)); return; }
+    const v = e.target.closest('[data-v]'); if (v) { const [sk, ...rest] = v.dataset.v.split(':'), id = rest.join(':'); const r = sk === 'youtube' ? (liveData.items || []).find(x => x.id === id) : (socialData.items || []).find(x => x.src === sk && x.id === id); if (r) liveWatch(Object.assign({ kind: 'live' }, r)); return; }
     const ev = e.target.closest('[data-e]'); if (ev) { const x = evItems[+ev.dataset.e]; if (x) { globe.pointOfView({ lat: x.lat, lng: x.lon, altitude: 0.3 }, 1200); if (x.url) window.open(x.url, '_blank', 'noopener'); } }
   }, true);
   $('livebtn').onclick = () => { if (liveOpen && !$('panel').classList.contains('hidden')) { $('panel').classList.add('hidden'); liveOpen = false; } else openLive(); };
