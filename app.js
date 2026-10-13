@@ -628,7 +628,7 @@
     if (up) {
       play(up, false);
       ctl.autoRotate = false; autoRotate = false; $('rotate').style.opacity = .5;
-      globe.pointOfView({ lat: up[2], lng: up[3], altitude: 0.28 }, 2600);   // fly straight in to where 1UP Radio is
+      // (opening zoom-in to 1UP Radio removed at Billy's request, 2026-10-12)
       setTimeout(() => {   // browsers block sound before the first tap: fall back to muted autoplay, then unmute on the first touch
         if (ytPlaying || ytMode !== 'up') return;
         try { if (yt && yt.mute) { yt.mute(); yt.playVideo(); muted = true; } } catch (e) {}
