@@ -473,12 +473,13 @@
   $('lockBtn').onclick = () => setLock(!locked);
 
   // ---------- Live now: DJ sets streaming right now + tonight's events ----------
-  let liveData = { items: [] }, socialData = { items: [] }, djIndex = { djs: [] }, liveQ = '', evData = { items: [] }, liveItems = [], evItems = [], liveTab = 'yt', liveOpen = false, watching = null, liveFam = '';
+  let liveData = { items: [] }, socialData = { items: [] }, djIndex = { djs: [] }, djProf = { djs: [] }, liveQ = '', evData = { items: [] }, liveItems = [], evItems = [], liveTab = 'yt', liveOpen = false, watching = null, liveFam = '';
   async function loadLive() {
     try { liveData = await (await fetch('data/live.json?t=' + Date.now())).json(); } catch (e) {}
     try { evData = await (await fetch('data/events.json?t=' + Date.now())).json(); } catch (e) {}
     try { socialData = await (await fetch('data/social.json?t=' + Date.now())).json(); } catch (e) {}
     try { djIndex = await (await fetch('data/dj_index.json?t=' + Date.now())).json(); } catch (e) {}
+    try { djProf = await (await fetch('data/dj_profiles.json?t=' + Date.now())).json(); } catch (e) {}
     liveItems = (liveData.items || []).filter(r => r.lat != null && (!liveFam || (r.fam || []).includes(liveFam))).map(r => Object.assign({ lng: r.lon }, r)); evItems = evData.items || [];
     const n = ytLive().length + (socialData.items || []).length;   // YouTube + Twitch + Kick + TikTok (roster) $('livecount').textContent = n || ''; $('livebtn').title = 'Social live right now: ' + n + ' · updated ' + (liveData.updated ? ago(liveData.updated) : '—'); dirty = true;
     if (liveOpen) { const st = $('plist').scrollTop; renderLive(); $('plist').scrollTop = st; }
@@ -491,7 +492,7 @@
   function famOfFilter() { return filter.kind === 'family' ? filter.fam : filter.kind === 'genre' ? G[filter.id].family : ''; }   // (no longer drives the Live list)
   const SRC = { yt: ['YouTube', 'https://www.youtube.com/live'], tw: ['Twitch', 'https://www.twitch.tv/directory/category/music'], kick: ['Kick', 'https://kick.com/categories/music'], tt: ['TikTok', 'https://www.tiktok.com/live'], ig: ['Instagram', 'https://www.instagram.com/'] };
   const TAB2SRC = { tw: 'twitch', kick: 'kick', tt: 'tiktok', ig: 'instagram' };
-  const profileURL = (src, id) => { id = String(id).replace(/^@/, ''); return { twitch: 'https://www.twitch.tv/', kick: 'https://kick.com/', tiktok: 'https://www.tiktok.com/@', instagram: 'https://www.instagram.com/', youtube: 'https://www.youtube.com/@' }[src] + encodeURIComponent(id) + (src === 'tiktok' ? '/live' : ''); };
+  const profileURL = (src, id) => { id = String(id).replace(/^@/, ''); return { twitch: 'https://www.twitch.tv/', kick: 'https://kick.com/', tiktok: 'https://www.tiktok.com/@', instagram: 'https://www.instagram.com/', youtube: 'https://www.youtube.com/@', soundcloud: 'https://soundcloud.com/', facebook: 'https://www.facebook.com/' }[src] + encodeURIComponent(id) + (src === 'tiktok' ? '/live' : ''); };
   const myDJs = () => { try { return JSON.parse(localStorage.getItem('rg-mydjs') || '[]'); } catch (e) { return []; } };
   const allDJs = () => (djIndex.djs || []).map(d => ({ src: d.src, id: d.id, name: d.name })).concat(myDJs().map(d => ({ src: d.src, id: d.id, name: d.name, mine: 1 })));
   const socOf = k => (socialData.items || []).filter(r => r.src === k).sort((x, y) => (y.viewers || 0) - (x.viewers || 0));
@@ -1101,18 +1102,27 @@
     return (liveData.items || []).filter(r => { const h = fold([r.title, r.dj, r.channel, r.place, r.q].filter(Boolean).join(' ')); return toks.every(t => h.includes(t)); }).sort((x, y) => (y.views || 0) - (x.views || 0)).slice(0, 8);
   }
   function searchDJs(q) {
-    const out = []; for (const src of ['twitch', 'kick', 'tiktok', 'instagram', 'youtube']) {
+    const out = []; for (const src of ['twitch', 'kick', 'tiktok', 'instagram', 'soundcloud', 'facebook', 'youtube']) {
       const m = allDJs().filter(d => d.src === src && matchQ(q, d.name, d.id)).map(d => Object.assign({ live: liveOfDJ(d) }, d)).sort((x, y) => (y.live ? 1 : 0) - (x.live ? 1 : 0) || x.name.localeCompare(y.name)).slice(0, 6);
       out.push(...m);
     } return out;
   }
-  const runSearch = q => { sres = { places: searchPlaces(q), stations: searchStations(q), genres: searchGenres(q), live: searchLive(q), djs: searchDJs(q), q }; renderSearch(); };
+  const searchProfiles = q => (djProf.djs || []).filter(p => matchQ(q, p.name, (p.aka || []).join(' '))).slice(0, 3);
+  const runSearch = q => { sres = { places: searchPlaces(q), stations: searchStations(q), genres: searchGenres(q), live: searchLive(q), djs: searchDJs(q), profs: searchProfiles(q), q }; renderSearch(); };
   let st, sres = { places: [], stations: [] };
   function renderSearch() {
     const box = $('sresults'); let html = '';
+    for (const p of (sres.profs || [])) {
+      const NM = { instagram: 'Instagram', twitch: 'Twitch', tiktok: 'TikTok', soundcloud: 'SoundCloud', facebook: 'Facebook', youtube: 'YouTube', kick: 'Kick', website: 'Website' }, q = encodeURIComponent(p.name);
+      const live = src => (p.live || []).find(l => l.src === src);
+      html += '<div class="shead">DJ · ' + esc([p.city, p.genre].filter(Boolean).join(' · ')) + '</div><div class="row djcard"><div class="t"><div class="n">' + esc(p.name) + ((p.live || []).length ? ' <span style="color:#ff5a5f">● LIVE NOW</span>' : '') + '</div><div class="sa">' +
+        Object.entries(p.links || {}).map(([k, u]) => '<a href="' + esc(u) + '" target="_blank" rel="noopener"' + (live(k) ? ' style="border-color:#ff5a5f;color:#ff8f93"' : '') + '>' + (live(k) ? '🔴 ' : '') + (NM[k] || k) + (live(k) ? ' LIVE' : '') + '</a>').join('') +
+        (p.links && p.links.youtube ? '' : '<a href="https://www.youtube.com/results?search_query=' + q + '+live+mix" target="_blank" rel="noopener">▶ YouTube mixes</a>') +
+        '</div>' + ((p.mixes || []).length ? '<div class="djmix"><div class="m">Latest mixes &amp; live sets</div>' + p.mixes.slice(0, 8).map(m => '<a href="' + esc(m.url) + '" target="_blank" rel="noopener">' + (m.live ? '🔴 ' : '♫ ') + esc(m.title) + '</a>').join('') + '</div>' : '') + '</div></div>';
+    }
     if ((sres.genres || []).length) html += '<div class="shead">Genres</div>' + sres.genres.map((g, i) => '<div class="row place" data-g="' + i + '"><div class="ph tile" style="background:' + (FAMCOL[g.family] || '#2b4a63') + '">♪</div><div class="t"><div class="n">' + esc(g.name) + '</div><div class="m">' + esc(g.family) + ' · ' + g.n + ' stations</div></div></div>').join('');
     if ((sres.live || []).length) html += '<div class="shead">DJs &amp; live sets</div>' + sres.live.map((r, i) => '<div class="row lrow" data-l="' + i + '"><img class="lth" loading="lazy" src="https://i.ytimg.com/vi/' + esc(r.id) + '/mqdefault.jpg" onerror="this.style.visibility=\'hidden\'"><div class="t"><div class="n">' + esc(r.title) + '</div><div class="m">' + esc([r.dj || r.channel, r.place, r.kind === 'live' ? 'LIVE' : '24/7'].filter(Boolean).join(' · ')) + '</div></div></div>').join('');
-    if ((sres.djs || []).length) { const names = { twitch: 'Twitch', kick: 'Kick', tiktok: 'TikTok', instagram: 'Instagram', youtube: 'YouTube' }; let last = '';
+    if ((sres.djs || []).length) { const names = { twitch: 'Twitch', kick: 'Kick', tiktok: 'TikTok', instagram: 'Instagram', youtube: 'YouTube', soundcloud: 'SoundCloud', facebook: 'Facebook' }; let last = '';
       sres.djs.forEach((d, i) => { if (d.src !== last) { last = d.src; html += '<div class="shead">DJs · ' + names[d.src] + '</div>'; }
         html += '<div class="row lrow" data-d="' + i + '"><div class="ph tile" style="background:#2b4a63">' + esc((d.name || '?').slice(0, 1).toUpperCase()) + '</div><div class="t"><div class="n">' + esc(d.name) + (d.live ? ' <span style="color:#ff5a5f">● LIVE</span>' : '') + '</div><div class="m">' + esc(d.live ? (d.live.title || '') + (d.live.viewers ? ' · ' + d.live.viewers.toLocaleString() + ' watching' : '') : names[d.src] + ' · open profile ↗') + '</div></div></div>'; }); }
     if ((sres.q || '').length >= 3) { const e = encodeURIComponent(sres.q); html += '<div class="shead">Look up “' + esc(sres.q) + '” mixes online</div><div class="row mixrow"><div class="t"><div class="sa">' +
@@ -1132,7 +1142,7 @@
   $('ssearch').addEventListener('keydown', e => { if (e.key === 'Enter') { const r = $('sresults').querySelector('.row'); if (r) r.click(); } if (e.key === 'Escape') $('sresults').classList.add('hidden'); });
   $('sresults').addEventListener('click', e => {
     if (starClick(e)) return;
-    if (e.target.closest('.mixrow')) return;   // the link-outs open by themselves
+    if (e.target.closest('.mixrow') || e.target.closest('.djcard')) return;   // the link-outs open by themselves
     const r = e.target.closest('.row'); if (!r) return;
     $('sresults').classList.add('hidden');
     if (r.dataset.p !== undefined) { goPlace(sres.places[+r.dataset.p]); return; }

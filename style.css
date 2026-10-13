@@ -410,7 +410,7 @@ button,input,select,label{touch-action:manipulation}
 @media(prefers-reduced-motion:reduce){#ptitle .onair{animation:none}}
 
 /* lyrics satellite + popup */
-#sat{position:fixed;left:0;top:0;z-index:7;display:none;cursor:pointer;text-align:center;color:#dfe9ff;filter:drop-shadow(0 0 8px rgba(120,190,255,.55));will-change:transform;-webkit-tap-highlight-color:transparent}
+#sat{position:fixed;left:0;top:0;z-index:4;display:none;cursor:pointer;text-align:center;color:#dfe9ff;filter:drop-shadow(0 0 8px rgba(120,190,255,.55));will-change:transform;-webkit-tap-highlight-color:transparent}
 #sat.on{display:block;animation:satglow 2.4s ease-in-out infinite}#sat span{display:block;font:800 8.5px/1 system-ui;letter-spacing:.14em;margin-top:2px;color:var(--acc)}
 @keyframes satglow{50%{filter:drop-shadow(0 0 14px var(--acc))}}
 @media(prefers-reduced-motion:reduce){#sat.on{animation:none}}
@@ -424,3 +424,7 @@ button,input,select,label{touch-action:manipulation}
 #lockBtn.on{background:var(--acc)!important;color:var(--acc-ink,#04121c)!important;border-color:var(--acc)!important}
 body.locked #globe,body.locked #dots,body.locked #bullseye,body.locked #side,body.locked #sideScrim,body.locked #searchwrap,body.locked #panel,body.locked #rolo,body.locked #themepop,body.locked #favdrawer,body.locked #topbar button:not(#lockBtn),body.locked #randomBar,body.locked .sh{pointer-events:none!important}
 body.locked #topbar button:not(#lockBtn),body.locked #searchwrap,body.locked #randomBar{opacity:.35}
+
+.djcard{cursor:default;padding-bottom:10px}.djcard .n{font-size:16px}.djcard .sa a{border-color:var(--acc);color:var(--acc)}
+.djmix{margin-top:10px;display:flex;flex-direction:column;gap:2px}.djmix .m{font-size:11px;color:var(--dim);margin-bottom:2px;letter-spacing:.04em;text-transform:uppercase}
+.djmix a{color:var(--txt);text-decoration:none;font-size:13px;line-height:1.3;padding:5px 0;border-top:1px solid var(--line);display:block}.djmix a:hover{color:var(--acc)}
