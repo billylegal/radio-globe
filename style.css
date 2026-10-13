@@ -249,3 +249,7 @@ button,input,select,label{touch-action:manipulation}
 @keyframes shx{from{transform:translateX(0)}to{transform:translateX(calc(100vw - 96px))}}
 @keyframes shy{from{transform:translateY(0)}to{transform:translateY(calc(100vh - 70px))}}
 @media(prefers-reduced-motion:reduce){.shx,.shy{animation:none}}
+
+/* LIVE NOW hidden for now (feature kept in code) */
+#livebtn{display:none!important}
+#randomBar{flex:none}

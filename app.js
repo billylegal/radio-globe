@@ -614,6 +614,7 @@
     play(s, true); openPanel([s], s[0], s[12] || '');
   }
   $('random').onclick = () => { randomMode = true; tries = 0; randomStation(); };
+  $('randomBar').onclick = () => $('random').click();
   $('rotate').onclick = () => { autoRotate = !autoRotate; ctl.autoRotate = autoRotate; $('rotate').style.opacity = autoRotate ? 1 : .5; };
   $('spaceBtn').onclick = () => setSpaced(!spaced, true);
   // ---------- always open in Ghost view with 1UP Radio playing ----------
