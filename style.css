@@ -251,7 +251,6 @@ button,input,select,label{touch-action:manipulation}
 @media(prefers-reduced-motion:reduce){.shx,.shy{animation:none}}
 
 /* LIVE NOW hidden for now (feature kept in code) */
-#livebtn{display:none!important}
 #randomBar{flex:none}
 
 /* phones: tapping one station shows its full info card (no cramped detail + duplicate list row) */
@@ -388,3 +387,10 @@ button,input,select,label{touch-action:manipulation}
 
 /* shuttle is driven by app.js now (orbits the Earth) */
 .shx,.shy{animation:none!important}
+
+/* menu specials: LIVE NOW / Old-Time Stories / Kids, under the theme + genre search */
+#specials{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 4px}
+#specials button{flex:1 1 auto;min-height:36px;padding:7px 11px;border-radius:10px;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:7px}
+#specials .spbtn{background:rgba(255,255,255,.07);border:1px solid var(--line);color:var(--txt);font-weight:700}
+#specials .spbtn:hover{border-color:var(--acc)}#specials .spbtn.on{background:var(--acc);color:var(--acc-ink,#04121c);border-color:var(--acc)}
+#specials #livebtn{flex:1 1 100%}

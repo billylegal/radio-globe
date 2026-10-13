@@ -8,6 +8,14 @@
   const DB = await res.json();
   const G = DB.genres, S = DB.stations;
   const famOf = G.map(g => g.family);
+  // hand-picked departments: Old-Time Stories (radio drama, audiobooks, old-time radio) and Kids
+  const gid = n => { const g = G.find(x => x.name === n); return g ? g.id : -1; };
+  const SETS = {
+    stories: { label: '📖 Old-Time Stories', ids: [gid('Audiobooks & Drama')],
+      re: /old.?time|\botr\b|radio drama|radio theat|audio.?book|storytell|story ?time|bedtime|short stories|tales|mystery theat|golden age of radio|h[öo]rspiel|h[öo]rbuch|livre audio|lectura/i, no: /vinyl|christmas|top ?40|hip.?hop|alternative|gotradio|laut\.fm sound/i },
+    kids: { label: '🧒 Kids', ids: [gid('Kids')], re: /\b(kids?|kinder|children|enfants|ni[ñn]os|bambini|junior|cartoon)\b/i, no: /adult|18\+/i }
+  };
+  for (const k in SETS) { const d = SETS[k]; d.test = s => s[11].some(i => d.ids.includes(i)) || (d.re.test(s[0] + ' ' + (s[18] || '')) && !(d.no && d.no.test(s[0]))); }
 
   let revealed = false;
   function reveal() { if (revealed) return; revealed = true; const l = $('loading'); l.classList.add('fading'); setTimeout(() => l.classList.add('hidden'), 650); }
@@ -23,22 +31,23 @@
   const cellKey = (la, lo, c) => Math.floor((la + 90) / c) + ':' + Math.floor((lo + 180) * Math.max(0.15, Math.cos(la * Math.PI / 180)) / c);
 
   function applyFilter() {
-    if (typeof liveFam !== 'undefined') { const lf = famOfFilter(); if (lf !== liveFam) { liveFam = lf; loadLiveFilter(); if (liveOpen) renderLive(); } }
-    let base;
+    let base;   // (Live is its own department: its genre list is separate from this filter)
     if (filter.kind === 'all') base = S;
     else if (filter.kind === 'genre') base = S.filter(s => s[11].includes(filter.id));
+    else if (filter.kind === 'set') base = S.filter(SETS[filter.key].test);
     else { const ids = new Set(G.filter(g => g.family === filter.fam).map(g => g.id)); base = S.filter(s => s[11].some(i => ids.has(i))); }
     bandCounts = [0, 0, 0, 0, 0]; for (const s of base) if (!playableOnly || s[1]) bandCounts[s[14]]++;
     shown = base.filter(s => (band < 0 || s[14] === band) && (!playableOnly || s[1]) && (!favOnly || favs.has(s[13])));
     paintBands(); paintFavs();
-    const label = filter.kind === 'all' ? 'All genres' : filter.kind === 'genre' ? G[filter.id].name : filter.fam;
+    const label = filter.kind === 'all' ? 'All genres' : filter.kind === 'genre' ? G[filter.id].name : filter.kind === 'set' ? SETS[filter.key].label.replace(/^\S+\s/, '') : filter.fam;
     $('favonly').checked = favOnly;
     $('stat').textContent = label + (band >= 0 ? ' · ' + BAND[band] : '') + ' · ' + shown.length.toLocaleString() + ' stations';
-    history.replaceState(null, '', filter.kind === 'all' ? location.pathname : '#' + encodeURIComponent(filter.kind === 'genre' ? G[filter.id].name : filter.fam));
+    history.replaceState(null, '', filter.kind === 'all' ? location.pathname : '#' + encodeURIComponent(filter.kind === 'genre' ? G[filter.id].name : filter.kind === 'set' ? filter.key : filter.fam));
     refreshPoints();
     document.querySelectorAll('.chip,.allbtn').forEach(e => e.classList.remove('on'));
     const on = filter.kind === 'all' ? $('allbtn') : filter.kind === 'genre' ? document.querySelector('.chip[data-g="' + filter.id + '"]') : null;
     if (on) on.classList.add('on');
+    document.querySelectorAll('#specials [data-set]').forEach(b => b.classList.toggle('on', filter.kind === 'set' && filter.key === b.dataset.set));
   }
 
   // ---------- clustering ----------
@@ -415,7 +424,7 @@
   setInterval(loadLive, 30 * 1000);
   function ago(ts) { const m = Math.max(0, Math.round((Date.now() / 1000 - ts) / 60)); return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : Math.round(m / 60) + ' h ago'; }
   function openLive(tab) { if (tab) liveTab = tab; liveOpen = true; renderLive(); $('panel').classList.remove('hidden'); }
-  function famOfFilter() { return filter.kind === 'family' ? filter.fam : filter.kind === 'genre' ? G[filter.id].family : ''; }
+  function famOfFilter() { return filter.kind === 'family' ? filter.fam : filter.kind === 'genre' ? G[filter.id].family : ''; }   // (no longer drives the Live list)
   function renderLive() {
     const up = (liveData.upcoming || []), all = (liveData.items || []), rec = (liveData.recent || []);
     const inFam = r => !liveFam || (r.fam || []).includes(liveFam);
@@ -1250,6 +1259,13 @@
     const chip = e.target.closest('.chip'); if (chip) { filter = { kind: 'genre', id: +chip.dataset.g }; applyFilter(); return showGenreList(G[filter.id].name); }
     const fh = e.target.closest('.fh'); if (fh) { fh.parentElement.classList.toggle('open'); if (e.detail === 2) { filter = { kind: 'family', fam: fh.dataset.fam }; applyFilter(); showGenreList(fh.dataset.fam); } }
   });
+  // Specials: LIVE NOW, Old-Time Stories, Kids (a button each, right under the theme/search in the menu)
+  $('specials').addEventListener('click', e => {
+    const b = e.target.closest('[data-set]'); if (!b) { if (e.target.closest('#livebtn') && innerWidth <= 820) sideOpen(false); return; }
+    filter = { kind: 'set', key: b.dataset.set }; applyFilter(); if (innerWidth <= 820) sideOpen(false);
+    showGenreList(SETS[b.dataset.set].label.replace(/^\S+\s/, ''));
+    const top = shown.filter(s => s[1] && !isUP(s) && !isBL(s) && !/christmas|xmas|3abn/i.test(s[0])).sort((x, y) => y[5] - x[5])[0]; if (top) play(top, false);   // start the most popular one right away
+  });
   $('gsearch').addEventListener('input', e => {
     buildGenres(e.target.value); clearTimeout(st); const q = e.target.value.trim();
     if (q.length < 2) { $('sresults').classList.add('hidden'); return; }
@@ -1259,7 +1275,7 @@
 
   // initial filter from URL hash
   const h = decodeURIComponent(location.hash.slice(1));
-  if (h && !/^s=/.test(h)) { const g = G.find(x => x.name.toLowerCase() === h.toLowerCase()); if (g) filter = { kind: 'genre', id: g.id }; else if (fams.includes(h)) filter = { kind: 'family', fam: h }; }
+  if (h && !/^s=/.test(h)) { const g = G.find(x => x.name.toLowerCase() === h.toLowerCase()); if (g) filter = { kind: 'genre', id: g.id }; else if (fams.includes(h)) filter = { kind: 'family', fam: h }; else if (SETS[h]) filter = { kind: 'set', key: h }; }
   buildGenres(); applyFilter();
   const sm = /^s=([^&]+)/.exec(h), altp = /[&?]alt=([\d.]+)/.exec(h);
   if (sm) { const s = S.find(x => x[13] === sm[1]); if (s) { openPanel([s], s[0], s[12] || ''); detail(s); setPlayerLogo(s); $('pname').textContent = s[0]; $('pmeta').textContent = 'Shared station · press ▶ to listen'; $('pplay').disabled = !s[1]; $('shareBtn').disabled = false; globe.pointOfView({ lat: s[2], lng: s[3], altitude: altp ? +altp[1] : 0.4 }, 0); ctl.autoRotate = false; autoRotate = false; $('pplay').onclick = () => { play(s); $('pplay').onclick = prevPlayClick; }; } }
