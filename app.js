@@ -596,7 +596,9 @@
     document.querySelectorAll('.row').forEach(r => r.classList.toggle('now', panelList[+r.dataset.i] && panelList[+r.dataset.i][13] === s[13]));
     fetch('https://de1.api.radio-browser.info/json/url/' + s[13], { mode: 'no-cors' }).catch(() => {});
   }
+  let startElec = null;
   function failed() {
+    if (startElec && !randomMode) { startElec(); return; }
     $('pmeta').textContent = 'This stream is unavailable right now' + (randomMode ? ' — trying another…' : '');
     if (randomMode && ++tries < 4) setTimeout(() => randomStation(), 500);
   }
@@ -625,7 +627,19 @@
       muted = false;
     };
     ['pointerdown', 'keydown', 'touchstart'].forEach(ev => addEventListener(ev, () => { if (tap.style.display !== 'none' || muted) unlock(); }, { passive: true }));
-    if (up) {
+    // every visit starts on a fresh random Electronic station (1UP Radio is the fallback)
+    const elec = S.filter(s => s[1] && typeof s[1] === 'string' && !isUP(s) && !isBL(s) && s[11].some(g => famOf[g] === 'Electronic'));
+    if (elec.length) {
+      let n = 0;
+      const pick = () => { const s = elec[(Math.random() * elec.length) | 0]; play(s, false); openPanel([s], s[0], s[12] || ''); };
+      startElec = () => { if (++n < 6) pick(); };
+      ctl.autoRotate = false; autoRotate = false; $('rotate').style.opacity = .5;
+      pick();
+      tap.textContent = '▶ Tap to start the radio';
+      setTimeout(() => { if (audio.paused && !ytOn) tap.style.display = 'block'; }, 2500);
+      ['pointerdown', 'keydown', 'touchstart'].forEach(ev => addEventListener(ev, () => { if (tap.style.display !== 'none') { tap.style.display = 'none'; if (audio.paused && current && current[1]) audio.play().catch(() => {}); } }, { passive: true }));
+      setInterval(() => { if (tap.style.display !== 'none' && !audio.paused) tap.style.display = 'none'; }, 700);
+    } else if (up) {
       play(up, false);
       ctl.autoRotate = false; autoRotate = false; $('rotate').style.opacity = .5;
       // (opening zoom-in to 1UP Radio removed at Billy's request, 2026-10-12)
