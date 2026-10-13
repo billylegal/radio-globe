@@ -621,7 +621,8 @@
     if (!$('panel').classList.contains('hidden') && $('panel').classList.contains('single')) { $('panel').classList.add('hidden'); return; }
     openPanel([current], current[0], current[12] || ''); detail(current);
   };
-  ['plogo', 'pname', 'pmeta'].forEach(id => { $(id).style.cursor = 'pointer'; $(id).addEventListener('click', toggleInfo); });
+  ['plogo', 'pname', 'pmeta'].forEach(id => { $(id).style.cursor = 'pointer'; });
+  document.querySelector('#player .info').addEventListener('click', toggleInfo); $('plogo').addEventListener('click', toggleInfo);
   $('randomBar').onclick = () => $('random').click();
   $('rotate').onclick = () => { autoRotate = !autoRotate; ctl.autoRotate = autoRotate; $('rotate').style.opacity = autoRotate ? 1 : .5; };
   $('spaceBtn').onclick = () => setSpaced(!spaced, true);
@@ -631,7 +632,9 @@
     const up = S.find(isUP);
     const tap = document.createElement('div'); tap.id = 'tapStart'; tap.textContent = '▶ Tap to start 1UP Radio'; tap.style.display = 'none'; document.body.appendChild(tap);
     let muted = false;
+    let elecMode = false;
     const unlock = () => {
+      if (elecMode) return;
       try { if (yt && yt.unMute) { yt.unMute(); yt.setVolume(Math.round(+$('vol').value * 100)); if (!ytPlaying) yt.playVideo(); } else if (up && !ytOn) play(up, false); } catch (e) {}
       muted = false;
     };
@@ -639,8 +642,8 @@
     // every visit starts on a fresh random Electronic station (1UP Radio is the fallback)
     const elec = S.filter(s => s[1] && typeof s[1] === 'string' && !isUP(s) && !isBL(s) && s[11].some(g => famOf[g] === 'Electronic'));
     if (elec.length) {
-      let n = 0;
-      const pick = () => { const s = elec[(Math.random() * elec.length) | 0]; play(s, false); openPanel([s], s[0], s[12] || ''); };
+      elecMode = true; let n = 0;
+      const pick = () => { const s = elec[(Math.random() * elec.length) | 0]; play(s, false); };
       startElec = () => { if (++n < 6) pick(); };
       ctl.autoRotate = false; autoRotate = false; $('rotate').style.opacity = .5;
       pick();
@@ -675,7 +678,7 @@
   // Greek / Cyrillic transliteration so "athina", "Αθήνα" etc. still find things
   const words = new Array(S.length), hay = new Array(S.length);
   for (let i = 0; i < S.length; i++) {
-    const s = S[i]; const h = fold(s[0] + ' ' + s[16] + ' ' + s[12] + ' ' + s[4]); hay[i] = h;
+    const s = S[i]; const h = fold(s[0] + ' ' + s[16] + ' ' + s[12] + ' ' + s[4] + ' ' + (s[18] || '') + ' ' + (s[17] || '') + ' ' + (s[11] || []).map(g => G[g].name).join(' ')); hay[i] = h;
     const w = h.split(' '), nm = fold(s[0]).split(' '), extra = [];
     // glued forms so "billylegal" finds "Billy Legal ..." (pairs, triples, whole name squashed)
     for (let k = 0; k + 1 < nm.length; k++) { extra.push(nm[k] + nm[k + 1], nm[k + 1] + nm[k]); if (k + 2 < nm.length) extra.push(nm[k] + nm[k + 1] + nm[k + 2]); }
@@ -761,18 +764,26 @@
       if (all.length) { const m = a => a.sort((x, y) => x - y)[a.length >> 1]; la = m(all.map(s => s[2])); lo = m(all.map(s => s[3])); const sp = Math.max(...all.map(s => Math.abs(s[2] - la)).sort((x, y) => x - y).slice(0, Math.ceil(all.length * .9)).slice(-1), 1); globe.pointOfView({ lat: la, lng: lo, altitude: Math.min(2.2, Math.max(0.35, sp / 14)) }, 1600); }
     }
   }
+  function searchGenres(q) { const f = fold(q); if (f.length < 2) return []; return G.filter(g => fold(g.name).includes(f) || fold(g.family).startsWith(f)).sort((x, y) => (fold(y.name).startsWith(f) - fold(x.name).startsWith(f)) || y.n - x.n).slice(0, 6); }
+  function searchLive(q) {
+    const toks = fold(q).split(' ').filter(Boolean); if (!toks.length) return [];
+    return (liveData.items || []).filter(r => { const h = fold([r.title, r.dj, r.channel, r.place, r.q].filter(Boolean).join(' ')); return toks.every(t => h.includes(t)); }).sort((x, y) => (y.views || 0) - (x.views || 0)).slice(0, 8);
+  }
+  const runSearch = q => { sres = { places: searchPlaces(q), stations: searchStations(q), genres: searchGenres(q), live: searchLive(q) }; renderSearch(); };
   let st, sres = { places: [], stations: [] };
   function renderSearch() {
     const box = $('sresults'); let html = '';
+    if ((sres.genres || []).length) html += '<div class="shead">Genres</div>' + sres.genres.map((g, i) => '<div class="row place" data-g="' + i + '"><div class="ph tile" style="background:' + (FAMCOL[g.family] || '#2b4a63') + '">♪</div><div class="t"><div class="n">' + esc(g.name) + '</div><div class="m">' + esc(g.family) + ' · ' + g.n + ' stations</div></div></div>').join('');
+    if ((sres.live || []).length) html += '<div class="shead">DJs &amp; live sets</div>' + sres.live.map((r, i) => '<div class="row lrow" data-l="' + i + '"><img class="lth" loading="lazy" src="https://i.ytimg.com/vi/' + esc(r.id) + '/mqdefault.jpg" onerror="this.style.visibility=\'hidden\'"><div class="t"><div class="n">' + esc(r.title) + '</div><div class="m">' + esc([r.dj || r.channel, r.place, r.kind === 'live' ? 'LIVE' : '24/7'].filter(Boolean).join(' · ')) + '</div></div></div>').join('');
     if (sres.places.length) html += '<div class="shead">Places</div>' + sres.places.map((p, i) => '<div class="row place" data-p="' + i + '"><div class="ph tile" style="background:#2b4a63">' + (p.kind === 'country' ? '🌐' : '📍') + '</div><div class="t"><div class="n">' + esc(p.name) + '</div><div class="m">' + esc(p.kind === 'country' ? 'Country' : placeLabel(p).slice(p.name.length + 2)) + ' · show stations here</div></div></div>').join('');
     if (sres.stations.length) html += '<div class="shead">Stations</div>' + sres.stations.map((s, i) => rowHTML(s, i)).join('');
-    if (!html) html = '<div class="row"><div class="t"><div class="n">No matches</div><div class="m">Try fewer letters, a city or a country</div></div></div>';
+    if (!html) html = '<div class="row"><div class="t"><div class="n">No matches</div><div class="m">Try fewer letters, a genre, DJ, city or country</div></div></div>';
     box.innerHTML = html; box.classList.remove('hidden');
   }
   $('ssearch').addEventListener('input', e => {
     clearTimeout(st); const q = e.target.value.trim();
     if (q.length < 2) { $('sresults').classList.add('hidden'); return; }
-    st = setTimeout(() => { sres = { places: searchPlaces(q), stations: searchStations(q) }; renderSearch(); }, 140);
+    st = setTimeout(() => runSearch(q), 140);
   });
   $('ssearch').addEventListener('keydown', e => { if (e.key === 'Enter') { const r = $('sresults').querySelector('.row'); if (r) r.click(); } if (e.key === 'Escape') $('sresults').classList.add('hidden'); });
   $('sresults').addEventListener('click', e => {
@@ -780,10 +791,12 @@
     const r = e.target.closest('.row'); if (!r) return;
     $('sresults').classList.add('hidden');
     if (r.dataset.p !== undefined) { goPlace(sres.places[+r.dataset.p]); return; }
+    if (r.dataset.g !== undefined) { const g = sres.genres[+r.dataset.g]; filter = { kind: 'genre', id: G.indexOf(g) }; applyFilter(); showGenreList(g.name); return; }
+    if (r.dataset.l !== undefined) { liveWatch(sres.live[+r.dataset.l]); return; }
     if (r.dataset.i === undefined) return;
     const s = sres.stations[+r.dataset.i]; randomMode = false; play(s, true); openPanel([s], s[0], s[12] || '');
   });
-  document.addEventListener('click', e => { if (!e.target.closest('#searchwrap')) $('sresults').classList.add('hidden'); });
+  document.addEventListener('click', e => { if (!e.target.closest('#searchwrap') && !e.target.closest('#gsearch')) $('sresults').classList.add('hidden'); });
 
   // ---------- genre sidebar ----------
   const fams = [...new Set(G.map(g => g.family))];
@@ -804,7 +817,12 @@
     const chip = e.target.closest('.chip'); if (chip) { filter = { kind: 'genre', id: +chip.dataset.g }; applyFilter(); return showGenreList(G[filter.id].name); }
     const fh = e.target.closest('.fh'); if (fh) { fh.parentElement.classList.toggle('open'); if (e.detail === 2) { filter = { kind: 'family', fam: fh.dataset.fam }; applyFilter(); showGenreList(fh.dataset.fam); } }
   });
-  $('gsearch').addEventListener('input', e => buildGenres(e.target.value));
+  $('gsearch').addEventListener('input', e => {
+    buildGenres(e.target.value); clearTimeout(st); const q = e.target.value.trim();
+    if (q.length < 2) { $('sresults').classList.add('hidden'); return; }
+    st = setTimeout(() => runSearch(q), 140);
+  });
+  $('gsearch').addEventListener('keydown', e => { if (e.key === 'Enter') { if (innerWidth <= 820) sideOpen(false); setTimeout(() => $('sresults').classList.remove('hidden'), 200); } });
 
   // initial filter from URL hash
   const h = decodeURIComponent(location.hash.slice(1));
