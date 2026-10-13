@@ -431,7 +431,8 @@
     try { await navigator.clipboard.writeText(text + '\n' + url); toast('Link copied to clipboard'); } catch (e) { prompt('Copy this link:', url); }
   }
   async function copy(txt, what) { try { await navigator.clipboard.writeText(txt); toast(what + ' copied'); } catch (e) { prompt('Copy:', txt); } }
-  function flyTo(s) { if (s[2] == null) return; ctl.autoRotate = false; autoRotate = false; globe.pointOfView({ lat: s[2], lng: s[3], altitude: 0.1 }, 1600); }
+  function flyTo(s) { return;   // zoom-in on station click removed (Billy, 2026-10-12); delete this line to bring it back
+    if (s[2] == null) return; ctl.autoRotate = false; autoRotate = false; globe.pointOfView({ lat: s[2], lng: s[3], altitude: 0.1 }, 1600); }
   function zoomTo(s) { ctl.autoRotate = false; autoRotate = false; globe.pointOfView({ lat: s[2], lng: s[3], altitude: 0.004 }, 2600); }
   function detail(s) {
     current = s;
