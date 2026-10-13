@@ -270,8 +270,8 @@ button,input,select,label{touch-action:manipulation}
   #player #pname,#player #plogo,#player #pmeta{cursor:pointer}
 }
 
-/* Spin button hidden for now (code kept) */
-#rotate{display:none!important}
+/* Random lives in the player bar now; the top-bar copy stays in the DOM (the bar button and N key click it) but is hidden */
+#random{display:none!important}
 @media(max-width:820px){#panel.single{max-height:78vh;max-height:78dvh}}
 
 /* ---- Rolodex view ---- */
