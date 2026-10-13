@@ -47,7 +47,7 @@
     document.querySelectorAll('.chip,.allbtn').forEach(e => e.classList.remove('on'));
     const on = filter.kind === 'all' ? $('allbtn') : filter.kind === 'genre' ? document.querySelector('.chip[data-g="' + filter.id + '"]') : null;
     if (on) on.classList.add('on');
-    document.querySelectorAll('#specials [data-set]').forEach(b => b.classList.toggle('on', filter.kind === 'set' && filter.key === b.dataset.set));
+    document.querySelectorAll('#genres .fh[data-set]').forEach(b => b.classList.toggle('on', filter.kind === 'set' && filter.key === b.dataset.set));
   }
 
   // ---------- clustering ----------
@@ -477,7 +477,7 @@
   $('lockBtn').onclick = () => setLock(!locked);
 
   // ---------- Live now: DJ sets streaming right now + tonight's events ----------
-  let liveData = { items: [] }, socialData = { items: [] }, djIndex = { djs: [] }, djProf = { djs: [] }, liveQ = '', evData = { items: [] }, liveItems = [], evItems = [], liveTab = 'yt', liveOpen = false, watching = null, liveFam = '';
+  let djOpen = false, liveData = { items: [] }, socialData = { items: [] }, djIndex = { djs: [] }, djProf = { djs: [] }, liveQ = '', evData = { items: [] }, liveItems = [], evItems = [], liveTab = 'yt', liveOpen = false, watching = null, liveFam = '';
   async function loadLive() {
     try { liveData = await (await fetch('data/live.json?t=' + Date.now())).json(); } catch (e) {}
     try { evData = await (await fetch('data/events.json?t=' + Date.now())).json(); } catch (e) {}
@@ -486,6 +486,8 @@
     try { djProf = await (await fetch('data/dj_profiles.json?t=' + Date.now())).json(); } catch (e) {}
     liveItems = (liveData.items || []).filter(r => r.lat != null && (!liveFam || (r.fam || []).includes(liveFam))).map(r => Object.assign({ lng: r.lon }, r)); evItems = evData.items || [];
     const n = ytLive().length + (socialData.items || []).length;   // YouTube + Twitch + Kick + TikTok (roster) $('livecount').textContent = n || ''; $('livebtn').title = 'Social live right now: ' + n + ' · updated ' + (liveData.updated ? ago(liveData.updated) : '—'); dirty = true;
+    try { document.querySelectorAll('.chip.dj small').forEach(s => { s.textContent = djMixCount(); }); } catch (e) {}
+    if (djOpen) { const st = $('plist').scrollTop; renderDJMixes(); $('plist').scrollTop = st; }
     if (liveOpen) { const st = $('plist').scrollTop; renderLive(); $('plist').scrollTop = st; }
   }
   const ytLive = () => (liveData.items || []).filter(r => r.kind === 'live' && !r.ai);   // only streams that are LIVE right now (no 24/7 loops, AI, scheduled or ended)
@@ -565,7 +567,7 @@
   function stopWatch() { if (!watching) return; watching = null; const lw = $('livewatch'); if (lw) lw.innerHTML = ''; }
   function liveWatch(r) {
     audio.pause(); if (hls) { hls.destroy(); hls = null; } ytStop(); $('pplay').textContent = '▶';
-    watching = r; openLive(liveTab);
+    watching = r; if (djOpen) renderDJMixes(); else openLive(liveTab);
     if (r.lat != null) { ctl.autoRotate = false; autoRotate = false; globe.pointOfView({ lat: r.lat, lng: r.lon, altitude: 0.5 }, 1200); }
   }
   $('pdetail').addEventListener('click', e => {
@@ -580,7 +582,7 @@
     const list = myDJs(); list.push({ name: n, src: TAB2SRC[liveTab], id: h }); try { localStorage.setItem('rg-mydjs', JSON.stringify(list)); } catch (err) {} toast(n + ' added'); fillLive();
   });
   $('plist').addEventListener('click', e => {
-    if (!liveOpen) return;
+    if (!liveOpen && !djOpen) return;
     const kd = e.target.closest('[data-k]'); if (kd) { const [ks, ...kr] = kd.dataset.k.split(':'); window.open(profileURL(ks, kr.join(':')), '_blank', 'noopener'); return; }
     const v = e.target.closest('[data-v]'); if (v) { const [sk, ...rest] = v.dataset.v.split(':'), id = rest.join(':'); const r = sk === 'youtube' ? (liveData.items || []).find(x => x.id === id) : (socialData.items || []).find(x => x.src === sk && x.id === id); if (r && sk === 'tiktok') { window.open(profileURL('tiktok', r.id), '_blank', 'noopener'); return; } if (r) liveWatch(Object.assign({ kind: 'live' }, r)); return; }
     const ev = e.target.closest('[data-e]'); if (ev) { const x = evItems[+ev.dataset.e]; if (x) { globe.pointOfView({ lat: x.lat, lng: x.lon, altitude: 0.3 }, 1200); if (x.url) window.open(x.url, '_blank', 'noopener'); } }
@@ -663,7 +665,7 @@
   }
   $('plist').addEventListener('scroll', () => { const p = $('plist'); if (!liveOpen && p.scrollTop + p.clientHeight > p.scrollHeight - 500) panelMore(); }, { passive: true });
   function openPanel(list, title, sub) {
-    liveOpen = false; panelList = list; panelDone = 0;
+    liveOpen = false; djOpen = false; panelList = list; panelDone = 0;
     $('panel').classList.toggle('single', list.length === 1);
     $('ptitle').textContent = title; $('psub').textContent = sub;
     $('plist').innerHTML = ''; $('plist').scrollTop = 0; panelMore(); $('panel').classList.remove('hidden');
@@ -1146,6 +1148,29 @@
       out.push(...m);
     } return out;
   }
+  // ---------- 🎧 DJ Mixes (first entry under Electronic): live DJ sets right now + every DJ's latest mixes ----------
+  const djLive = () => ytLive().filter(r => r.dj || (r.fam || []).includes('Electronic')).sort((x, y) => (y.views || 0) - (x.views || 0)).slice(0, 30)
+    .concat((socialData.items || []).filter(r => r.dj || /^(DJs|Live DJ)$/i.test(r.cat || '')).sort((x, y) => (y.viewers || 0) - (x.viewers || 0)).slice(0, 30));
+  function djMixCount() { return djLive().length + (djProf.djs || []).reduce((n, p) => n + (p.mixes || []).length, 0); }
+  function openDJMixes() { djOpen = true; liveOpen = false; renderDJMixes(); $('panel').classList.remove('hidden'); }
+  function renderDJMixes() {
+    const live = djLive(), profs = djProf.djs || [];
+    $('ptitle').textContent = '🎧 DJ Mixes'; $('psub').textContent = live.length + ' live now · ' + profs.length + ' DJs'; $('panel').classList.remove('single'); $('pdetail').classList.remove('hidden');
+    $('pdetail').innerHTML = '<div id="livewatch">' + (watching ? watchHTML(watching) : '') + '</div>';
+    const rowOf = r => {
+      const src = r.src || 'youtube', th = src === 'youtube' ? 'https://i.ytimg.com/vi/' + esc(r.id) + '/mqdefault.jpg' : esc(r.thumb || '');
+      const m = [r.dj || r.channel, (src === 'youtube' ? r.views : r.viewers) ? (src === 'youtube' ? r.views : r.viewers).toLocaleString() + ' watching' : '', { youtube: 'YouTube', twitch: 'Twitch', kick: 'Kick' }[src] || src].filter(Boolean).join(' · ');
+      return '<div class="row lrow" data-v="' + esc(src + ':' + r.id) + '"><img class="lth" loading="lazy" src="' + th + '" onerror="this.style.visibility=\'hidden\'"><div class="t"><div class="n">' + esc(r.title) + '</div><div class="m">' + esc(m) + '</div></div></div>';
+    };
+    let html = live.length ? '<div class="shead">🔴 Live DJ sets right now · ' + live.length + '</div>' + live.map(rowOf).join('') : '<div class="lempty">No DJ sets are live right now.</div>';
+    for (const p of profs) {
+      html += '<div class="shead">' + esc(p.name) + (p.city ? ' · ' + esc(p.city) : '') + ((p.live || []).length ? ' · 🔴 LIVE' : '') + '</div><div class="row djcard"><div class="t"><div class="sa">' +
+        Object.entries(p.links || {}).map(([k, u]) => '<a href="' + esc(u) + '" target="_blank" rel="noopener">' + esc(k[0].toUpperCase() + k.slice(1)) + '</a>').join('') + '</div>' +
+        ((p.mixes || []).length ? '<div class="djmix"><div class="m">Latest mixes &amp; live sets</div>' + p.mixes.slice(0, 10).map(m => '<a href="' + esc(m.url) + '" target="_blank" rel="noopener">' + (m.live ? '🔴 ' : '♫ ') + esc(m.title) + '</a>').join('') + '</div>' : '') + '</div></div>';
+    }
+    html += '<div class="lempty">Search any DJ name in the top bar to find their profile, mixes and live sets.</div>';
+    $('plist').innerHTML = html; panelList = [];
+  }
   const searchProfiles = q => (djProf.djs || []).filter(p => matchQ(q, p.name, (p.aka || []).join(' '))).slice(0, 3);
   const runSearch = q => { sres = { places: searchPlaces(q), stations: searchStations(q), genres: searchGenres(q), live: searchLive(q), djs: searchDJs(q), profs: searchProfiles(q), q }; renderSearch(); for (const p of sres.profs) if (p.photo) spawnDJSticker(p); };
   let st, sres = { places: [], stations: [] };
@@ -1422,24 +1447,34 @@
       const gs = G.filter(g => g.family === f && (!q || g.name.toLowerCase().includes(q)));
       if (!gs.length) continue;
       const fn = gs.reduce((a, g) => a + g.n, 0);
-      html += '<div class="fam' + (q ? ' open' : '') + '"><div class="fh" data-fam="' + esc(f) + '"><span class="dot" style="background:' + FAMCOL[f] + '"></span>' + esc(f) + '<span class="caret">›</span></div><div class="gl">' +
+      const djChip = f === 'Electronic' && (!q || 'dj mixes'.includes(q)) ? '<span class="chip dj" data-dj="1">🎧 DJ Mixes<small>' + djMixCount() + '</small></span>' : '';
+      html += '<div class="fam' + (q ? ' open' : '') + '"><div class="fh" data-fam="' + esc(f) + '"><span class="dot" style="background:' + FAMCOL[f] + '"></span>' + esc(f) + '<span class="caret">›</span></div><div class="gl">' + djChip +
         gs.sort((a, b) => b.n - a.n).map(g => '<span class="chip' + (filter.kind === 'genre' && filter.id === g.id ? ' on' : '') + '" data-g="' + g.id + '">' + esc(g.name) + '<small>' + g.n + '</small></span>').join('') + '</div></div>';
+    }
+    for (const k of ['kids', 'stories']) {   // their own categories at the bottom of the list
+      const lab = SETS[k].label, nm = lab.replace(/^\S+\s/, '');
+      if (q && !nm.toLowerCase().includes(q)) continue;
+      SETS[k].n = SETS[k].n != null ? SETS[k].n : S.filter(SETS[k].test).length;
+      html += '<div class="fam setrow"><div class="fh' + (filter.kind === 'set' && filter.key === k ? ' on' : '') + '" data-set="' + k + '"><span class="dot" style="background:' + (k === 'kids' ? '#ffd45a' : '#c79a6b') + '"></span>' + esc(lab) + '<small class="cnt">' + SETS[k].n + '</small></div></div>';
     }
     $('genres').innerHTML = html;
   }
   buildGenres();
   $('genres').addEventListener('click', e => {
+    const sb = e.target.closest('.fh[data-set]'); if (sb) { chooseSet(sb.dataset.set); return; }
+    if (e.target.closest('.chip[data-dj]')) { openDJMixes(); if (innerWidth <= 820) sideOpen(false); return; }
     if (e.target.closest('#allbtn')) { filter = { kind: 'all' }; return applyFilter(); }
     const chip = e.target.closest('.chip'); if (chip) { filter = { kind: 'genre', id: +chip.dataset.g }; applyFilter(); return showGenreList(G[filter.id].name); }
     const fh = e.target.closest('.fh'); if (fh) { fh.parentElement.classList.toggle('open'); if (e.detail === 2) { filter = { kind: 'family', fam: fh.dataset.fam }; applyFilter(); showGenreList(fh.dataset.fam); } }
   });
   // Specials: LIVE NOW, Old-Time Stories, Kids (a button each, right under the theme/search in the menu)
-  $('specials').addEventListener('click', e => {
-    const b = e.target.closest('[data-set]'); if (!b) { if (e.target.closest('#livebtn') && innerWidth <= 820) sideOpen(false); return; }
-    filter = { kind: 'set', key: b.dataset.set }; applyFilter(); if (innerWidth <= 820) sideOpen(false);
-    showGenreList(SETS[b.dataset.set].label.replace(/^\S+\s/, ''));
+  function chooseSet(key) {
+    filter = { kind: 'set', key }; applyFilter(); if (innerWidth <= 820) sideOpen(false);
+    showGenreList(SETS[key].label.replace(/^\S+\s/, ''));
     const top = shown.filter(s => s[1] && !isUP(s) && !isBL(s) && !/christmas|xmas|3abn/i.test(s[0])).sort((x, y) => y[5] - x[5])[0]; if (top) play(top, false);   // start the most popular one right away
-  });
+    buildGenres($('gsearch').value);
+  }
+  $('specials').addEventListener('click', e => { if (e.target.closest('#livebtn') && innerWidth <= 820) sideOpen(false); });
   $('gsearch').addEventListener('input', e => {
     buildGenres(e.target.value); clearTimeout(st); const q = e.target.value.trim();
     if (q.length < 2) { $('sresults').classList.add('hidden'); return; }

@@ -452,3 +452,7 @@ body.locked #topbar button:not(#lockBtn),body.locked #searchwrap,body.locked #ra
 .djstk i{position:absolute;left:50%;bottom:-13px;transform:translateX(-50%);white-space:nowrap;font:800 9px/1 system-ui;font-style:normal;letter-spacing:.1em;text-transform:uppercase;color:var(--acc);text-shadow:0 0 4px #000,0 0 3px #000}
 .djstk .x{position:absolute;right:-6px;top:-6px;width:20px;height:20px;border-radius:50%;background:rgba(0,0,0,.75);border:1px solid var(--line);color:#fff;display:grid;place-items:center;font:700 13px/1 system-ui;cursor:pointer}
 body.locked .djstk{pointer-events:none!important}
+
+/* menu: DJ Mixes chip + Kids/Stories categories at the bottom */
+.chip.dj{background:var(--acc);color:var(--acc-ink,#04121c);border-color:var(--acc);font-weight:800}.chip.dj small{opacity:.75;color:inherit}
+.fam.setrow .fh{cursor:pointer}.fam.setrow .fh .cnt{margin-left:auto;opacity:.6;font-size:11px}.fam.setrow .fh.on{color:var(--acc)}
