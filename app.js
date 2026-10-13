@@ -322,7 +322,7 @@
     if (current !== s && !c.live && !c.ev) play(s, false);   // start buffering while it glides in
     const dl = ((((c.lng - pov.lng) % 360) + 540) % 360) - 180;
     globe.pointOfView({ lat: c.lat, lng: pov.lng + dl, altitude: pov.altitude }, 520);
-    setTimeout(() => { ctl.enableDamping = true; snapping = false; hover = c; dirty = true; updateReticle(); }, 560);
+    setTimeout(() => { if (DG) { const q = project(c.lat, c.lng, 0.0015); DG.snaps++; DG.snapErr = Math.round(Math.hypot(q.x - innerWidth / 2, q.y - innerHeight / 2)); } ctl.enableDamping = true; snapping = false; hover = c; dirty = true; updateReticle(); }, 560);
   }
   gEl.addEventListener('pointerdown', e => {
     if (Math.hypot(e.clientX - innerWidth / 2, e.clientY - innerHeight / 2) < 56) tipSince = performance.now();   // tapping the scope shows its label again for 3 s
@@ -333,6 +333,8 @@
   ctl.enableRotate = false;   // we rotate; OrbitControls keeps zoom / pinch
   ctl.minPolarAngle = 0.22; ctl.maxPolarAngle = Math.PI - 0.22;   // stop short of the poles, where north-up dragging would swirl the globe
   const GR = 100;
+  // ---- #diag: open aviewfromspace.com/#diag on a phone to see a live self-test overlay (fps, touches, drag/fling/snap numbers, errors) ----
+  const DG = /diag/.test(location.hash) ? { rot: 0, steps: 0, maxStep: 0, fling: 0, snaps: 0, snapErr: null, errs: [], fps: [], minFps: 999, lastRaf: 0, pinch: 0, maxPtr: 0, zoomMin: 99, zoomMax: 0 } : null;
   function rayHit(px, py) {
     const cam = globe.camera(), cp = cam.position, L = Math.hypot(cp.x, cp.y, cp.z);
     const f = [-cp.x / L, -cp.y / L, -cp.z / L];
@@ -350,6 +352,7 @@
     const cx_ = ax[1] * p.z - ax[2] * p.y, cy_ = ax[2] * p.x - ax[0] * p.z, cz_ = ax[0] * p.y - ax[1] * p.x;
     p.set(p.x * c + cx_ * s + ax[0] * k * (1 - c), p.y * c + cy_ * s + ax[1] * k * (1 - c), p.z * c + cz_ * s + ax[2] * k * (1 - c));
     globe.camera().lookAt(0, 0, 0); ctl.update();
+    if (DG) { DG.rot += ang; DG.steps++; DG.maxStep = Math.max(DG.maxStep, ang); }
   }
   let grab = null, gsamp = [], flingRaf = 0, gptrs = 0;
   const stopFling = () => { if (flingRaf) { cancelAnimationFrame(flingRaf); flingRaf = 0; } };
@@ -382,6 +385,7 @@
     const dt = Math.max(30, sm[sm.length - 1].t - sm[0].t + 16) / 1000; let om = [wx / dt, wy / dt, wz / dt];
     const alt = globe.pointOfView().altitude, pxPerRad = GR * innerHeight / (0.93 * GR * (1 + alt)), maxW = 800 / pxPerRad;   // cap the fling speed (a steady glide, never a runaway spin)
     let w = Math.hypot(om[0], om[1], om[2]); if (w > maxW) { om = om.map(v => v * maxW / w); w = maxW; }
+    if (DG) DG.fling = Math.round(w * pxPerRad);
     if (w * pxPerRad < 140) return;   // small drags just stop where you let go
     let last = performance.now(), cur = w; const dir = om.map(v => v / w);
     const step = now => {
@@ -1414,5 +1418,31 @@
   buildGenres(); applyFilter();
   const sm = /^s=([^&]+)/.exec(h), altp = /[&?]alt=([\d.]+)/.exec(h);
   if (sm) { const s = S.find(x => x[13] === sm[1]); if (s) { openPanel([s], s[0], s[12] || ''); detail(s); setPlayerLogo(s); $('pname').textContent = s[0]; $('pmeta').textContent = 'Shared station · press ▶ to listen'; $('pplay').disabled = !s[1]; $('shareBtn').disabled = false; globe.pointOfView({ lat: s[2], lng: s[3], altitude: altp ? +altp[1] : 0.4 }, 0); ctl.autoRotate = false; autoRotate = false; $('pplay').onclick = () => { play(s); $('pplay').onclick = prevPlayClick; }; } }
+  if (DG) {
+    addEventListener('error', e => DG.errs.push((e.message || 'error') + ' @' + String(e.filename || '').split('/').pop() + ':' + e.lineno));
+    addEventListener('unhandledrejection', e => DG.errs.push('promise: ' + String(e.reason && e.reason.message || e.reason).slice(0, 80)));
+    addEventListener('pointerdown', () => { setTimeout(() => { DG.maxPtr = Math.max(DG.maxPtr, gptrs); }, 0); }, true);
+    const box = document.createElement('div'); box.id = 'diag';
+    box.innerHTML = '<pre id="dgT"></pre><div class="dgb"><button id="dgCopy">Copy report</button><button id="dgReset">Reset</button><button id="dgHide">Hide</button></div><ol><li>Drag slowly across Europe</li><li>Flick fast, let it glide</li><li>Drag along the very edge of the Earth</li><li>Pinch in and out</li><li>Tap 🎲 Random twice</li><li>Tap 🔓, try to drag, tap 🔒</li></ol>';
+    document.body.appendChild(box);
+    const tick = now => { requestAnimationFrame(tick); if (DG.lastRaf) { const f = 1000 / (now - DG.lastRaf); DG.fps.push(f); if (DG.fps.length > 60) DG.fps.shift(); if (DG.fps.length > 20) DG.minFps = Math.min(DG.minFps, f); } DG.lastRaf = now; const z = globe.pointOfView().altitude; DG.zoomMin = Math.min(DG.zoomMin, z); DG.zoomMax = Math.max(DG.zoomMax, z); };
+    requestAnimationFrame(tick);
+    const report = () => {
+      const f = DG.fps.length ? DG.fps.reduce((x, y) => x + y, 0) / DG.fps.length : 0, pov = globe.pointOfView();
+      return ['RADIO GLOBE DIAG ' + new Date().toISOString().slice(0, 19), navigator.userAgent.replace(/\(.*?\)/, m => m.slice(0, 40)), 'screen ' + innerWidth + 'x' + innerHeight + ' @' + (devicePixelRatio || 1) + 'x  touch ' + navigator.maxTouchPoints,
+        'fps now ' + f.toFixed(0) + '   worst ' + (DG.minFps === 999 ? '-' : DG.minFps.toFixed(0)),
+        'drag: ' + DG.steps + ' steps, ' + (DG.rot * 57.2958).toFixed(1) + '° total, biggest step ' + (DG.maxStep * 57.2958).toFixed(2) + '°',
+        'fling speed ' + DG.fling + ' px/s   fingers max ' + DG.maxPtr,
+        'snaps ' + DG.snaps + '   last snap landed ' + (DG.snapErr === null ? '-' : DG.snapErr + ' px off centre'),
+        'zoom altitude ' + pov.altitude.toFixed(2) + '  (seen ' + (DG.zoomMin === 99 ? '-' : DG.zoomMin.toFixed(2)) + ' .. ' + DG.zoomMax.toFixed(2) + ')',
+        'view ' + (spaced ? 'ghost' : 'earth') + '  locked ' + locked + '  playing ' + (isPlaying() ? 'yes' : 'no'),
+        'station ' + (current ? current[0].slice(0, 28) : '-'),
+        'errors ' + DG.errs.length + (DG.errs.length ? ': ' + DG.errs.slice(-3).join(' | ') : '')].join('\n');
+    };
+    setInterval(() => { $('dgT').textContent = report(); }, 400);
+    $('dgCopy').onclick = async () => { try { await navigator.clipboard.writeText(report()); toast('Report copied'); } catch (e) { prompt('Copy this:', report()); } };
+    $('dgReset').onclick = () => { Object.assign(DG, { rot: 0, steps: 0, maxStep: 0, fling: 0, snaps: 0, snapErr: null, errs: [], fps: [], minFps: 999, maxPtr: 0, zoomMin: 99, zoomMax: 0 }); };
+    $('dgHide').onclick = () => { box.remove(); };
+  }
   window.__radioGlobe = { replay() { upPlayIdx(upIdx, Date.now() / 1000 - (upS.delay || 0) - upS.plays[upIdx].t, 0); }, get upCur() { return upCur; }, get yt() { return yt; }, get ytState() { try { return yt && yt.getPlayerState(); } catch (e) { return 'err'; } }, get upIdx() { return upIdx; }, get bad() { return upBad; }, globe, get shown() { return shown; }, get cells() { return cells; }, project };
 })();

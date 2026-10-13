@@ -441,3 +441,7 @@ body.locked #topbar button:not(#lockBtn),body.locked #searchwrap,body.locked #ra
   #player{grid-template-areas:"logo info info info info save" "fav share rnd . . play" "vi vol vol vol vol vol"!important}
   #vol{height:34px}
 }
+
+#diag{position:fixed;left:6px;top:calc(env(safe-area-inset-top) + 118px);z-index:60;max-width:calc(100vw - 12px);background:rgba(0,0,0,.78);color:#9dffb0;border:1px solid #39ff14;border-radius:10px;padding:8px 10px;font:11px/1.35 ui-monospace,Menlo,monospace;pointer-events:none}
+#diag pre{margin:0;white-space:pre-wrap;word-break:break-word}#diag ol{margin:6px 0 0;padding-left:16px;color:#dfe9ff}
+#diag .dgb{display:flex;gap:6px;margin-top:6px;pointer-events:auto}#diag button{background:#39ff14;color:#031200;border:0;border-radius:8px;padding:8px 10px;font:700 12px system-ui}
