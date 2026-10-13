@@ -615,7 +615,7 @@
     if (!shown.length) return; randomMode = true;
     const pool = shown.filter(x => x[1]); if (!pool.length) return;
     let s, t = 0; do { s = pool[(Math.random() * pool.length) | 0]; } while (s === current && ++t < 5);
-    if (roloOn) { rolo.spinTo(s, () => play(s, false)); return; }
+    if (roloOn) { rolo.spinTo(s, () => {}); return; }
     play(s, true); openPanel([s], s[0], s[12] || '');
   }
   $('random').onclick = () => { randomMode = true; tries = 0; randomStation(); };
@@ -847,7 +847,7 @@
     const goTo = (i, smooth) => { i = Math.max(0, Math.min(list.length - 1, i)); snapping = true; sc.scrollTo({ top: i * H, behavior: smooth ? 'smooth' : 'auto' }); setTimeout(() => snapping = false, smooth ? 400 : 30); };
     let lastTouch = 0, playT = 0;
     sc.addEventListener('scroll', () => {
-      if (Date.now() - lastTouch < 3000) { clearTimeout(playT); playT = setTimeout(() => { const s = list[Math.round(sc.scrollTop / H)]; if (open && s && s !== current) { randomMode = false; play(s, false); render(); } }, 550); }
+      if (Date.now() - lastTouch < 3000) { clearTimeout(playT); playT = setTimeout(() => { const s = list[Math.round(sc.scrollTop / H)]; if (open && s && s !== current) { randomMode = false; play(s, false); render(); } }, 250); }
     }, { passive: true });
     sc.addEventListener('scroll', () => {
       render(); if (snapping) return; clearTimeout(snapT);
@@ -890,7 +890,8 @@
     // Random while in the Rolodex: spin the wheel down to the chosen station, then play it
     function spinTo(s, done) {
       build(); const i = list.indexOf(s); if (i < 0) { done(); return; }
-      const from = sc.scrollTop, to = i * H, t0 = performance.now(), dur = Math.min(2200, 900 + Math.abs(to - from) / H * 6);
+      if (s !== current) play(s, false);   // start buffering the stream right now, while the wheel is still spinning
+      const from = sc.scrollTop, to = i * H, t0 = performance.now(), dur = Math.min(1300, 600 + Math.abs(to - from) / H * 3);
       snapping = true; clearTimeout(snapT);
       const step = now => { const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3); sc.scrollTop = from + (to - from) * e; if (k < 1) requestAnimationFrame(step); else { snapping = false; render(); done(); } };
       requestAnimationFrame(step);
@@ -899,7 +900,7 @@
     // show only a set of stations (a searched city / country) in the wheel, A-Z
     function showCustom(l, label) { custom = l; customLabel = label; src = null; build(); size(); sp.style.height = Math.max(1, list.length * H + VH - H) + 'px'; goTo(0, false); render(); }
     // search result for one station: bring it to the front of the wheel and play it (no info card until it's touched)
-    function reveal(s) { if (list.indexOf(s) < 0) { custom = null; src = null; build(); size(); } spinTo(s, () => play(s, false)); }
+    function reveal(s) { randomMode = false; if (list.indexOf(s) < 0) { custom = null; src = null; build(); size(); } spinTo(s, () => {}); }
     // at launch: wheel starts at the top, then spins down to the opening station and plays it
     function intro() { if (!open || !current) return; build(); const i = list.indexOf(current); if (i < 0) return; sc.scrollTop = 0; render(); spinTo(current, () => { if (audio.paused) play(current, false); }); }
     return { intro, spinTo, showCustom, reveal, isOpen: () => open, refresh() { custom = null; if (open) { src = null; build(); size(); goTo(0, false); render(); } else src = null; }, toggle };
