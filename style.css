@@ -341,3 +341,7 @@ button,input,select,label{touch-action:manipulation}
   #plogo{width:44px;height:44px}
   #volIco{font-size:14px}
 }
+
+@keyframes mpulse{50%{transform:scale(1.35);opacity:.6}}
+.mutedpulse{animation:mpulse 1.1s ease-in-out infinite}
+@media(min-width:821px){#volIco.mutedpulse{display:inline-block}}

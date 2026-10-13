@@ -593,13 +593,27 @@
     const url = s[1];
     if (/\.m3u8(\?|$)/i.test(url) && window.Hls && Hls.isSupported()) { hls = new Hls(); hls.loadSource(url); hls.attachMedia(audio); hls.on(Hls.Events.ERROR, (_, d) => d.fatal && failed()); }
     else if (audio.src !== url) audio.src = url;   // (the early-start script may already be loading this exact stream)
-    audio.play().catch(() => {});
+    { const pr = audio.play(); if (pr && pr.catch) pr.catch(err => { if (err && err.name === 'NotAllowedError') startMuted(); }); }
     watchdog(s);
     pulseT = performance.now();
     if (fly) flyTo(s);
     document.querySelectorAll('.row').forEach(r => r.classList.toggle('now', panelList[+r.dataset.i] && panelList[+r.dataset.i][13] === s[13]));
     fetch('https://de1.api.radio-browser.info/json/url/' + s[13], { mode: 'no-cors' }).catch(() => {});
   }
+  // phones refuse to start SOUND without a tap, but allow muted autoplay: so start muted (stream buffers right away) and unmute on the first tap
+  let needUnmute = !!window.__needUnmute || audio.muted, lastUnmute = 0;
+  const paintMuted = () => { $('volIco').textContent = needUnmute ? '🔇' : '🔊'; $('volIco').classList.toggle('mutedpulse', needUnmute); };
+  // first real tap/key anywhere: unmute, and start the station if the browser had refused to (touch only counts as a gesture on release, so listen to pointerup/touchend/click)
+  let armed = true;
+  function onGesture() {
+    if (!armed) return;
+    if (needUnmute) { needUnmute = false; audio.muted = false; paintMuted(); lastUnmute = Date.now(); }
+    if (audio.paused && current && current[1] && !ytOn) { lastUnmute = Date.now(); const pr = audio.play(); if (pr && pr.then) pr.then(() => { armed = false; }, () => {}); }
+    else armed = false;
+  }
+  function startMuted() { audio.muted = true; needUnmute = true; paintMuted(); const p = audio.play(); if (p && p.catch) p.catch(() => {}); }
+  paintMuted();
+  ['pointerup', 'click', 'touchend', 'keydown'].forEach(ev => document.addEventListener(ev, onGesture, true));
   let startElec = null, startCur = null, wdT = 0;
   const lsGet = k => { try { return JSON.parse(localStorage.getItem(k) || '[]'); } catch (e) { return []; } };
   const lsAdd = (k, v, cap) => { try { const l = lsGet(k).filter(x => x !== v); l.push(v); localStorage.setItem(k, JSON.stringify(l.slice(-cap))); } catch (e) {} };
@@ -623,7 +637,7 @@
   audio.addEventListener('play', () => { if (!ytOn) $('pplay').textContent = '❚❚'; });
   audio.addEventListener('error', failed);
   audio.addEventListener('stalled', () => { if (audio.readyState < 3) $('pmeta').textContent = 'Buffering…'; });
-  const prevPlayClick = $('pplay').onclick = () => { if (ytOn && yt && yt.getPlayerState) { ytPlaying ? yt.pauseVideo() : yt.playVideo(); return; } if (!current) return; audio.paused ? audio.play().catch(failed) : audio.pause(); };
+  const prevPlayClick = $('pplay').onclick = () => { if (Date.now() - lastUnmute < 600) return; if (ytOn && yt && yt.getPlayerState) { ytPlaying ? yt.pauseVideo() : yt.playVideo(); return; } if (!current) return; audio.paused ? audio.play().catch(failed) : audio.pause(); };
   function randomStation() {
     if (!shown.length) return; randomMode = true;
     const bad = new Set(lsGet('rg-bad')); let pool = shown.filter(x => x[1]); if (!pool.length) return;
@@ -671,10 +685,6 @@
       ctl.autoRotate = false; autoRotate = false; $('rotate').style.opacity = .5;
       pick();
       $('panel').classList.add('hidden');   // opens with the info card closed; tap the station name/logo to open it
-      // browsers may block sound until the first touch: start the station on the first touch/key anywhere (but not on the player's own buttons)
-      let unlocked = false;
-      const firstGesture = ev => { if (unlocked) return; if (ev.target && ev.target.closest && ev.target.closest('#player')) { unlocked = true; return; } unlocked = true; if (audio.paused && current && current[1]) audio.play().catch(() => {}); };
-      ['pointerdown', 'keydown', 'touchstart'].forEach(evn => addEventListener(evn, firstGesture, { passive: true }));
     } else if (up) {
       play(up, false);
       ctl.autoRotate = false; autoRotate = false; $('rotate').style.opacity = .5;
