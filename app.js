@@ -869,7 +869,7 @@
     else { await ytSongList(); ytQ = shuffleArr(ytSongs); ytPos = -1; first = () => ytPlayPos(0); }
     if (tok !== ytTok) return;   // another station was chosen while this one was loading
     const init = () => { if (tok !== ytTok) return; if (yt) { first(); return; } yt = new YT.Player('ytplayer', { width: 200, height: 200, playerVars: { playsinline: 1, rel: 0, modestbranding: 1, iv_load_policy: 3 }, events: { onReady: () => { if (tok !== ytTok) return; try { yt.setVolume(Math.round(+$('vol').value * 100)); } catch (e) {} first(); },
-      onStateChange: e => { if (e.data === 1 && !ytOn) { try { yt.stopVideo(); } catch (x) {} return; } if (e.data === 1) { try { audio.pause(); } catch (x) {} stopWatch(); try { announce(); } catch (x) {} try { npPoll(); } catch (x) {} ytPlaying = true; ytErr = 0; try { if (!yt.isMuted()) yt.setVolume(Math.round(+$('vol').value * 100)); } catch (x) {} $('pplay').textContent = '❚❚'; } else if (e.data === 2) { ytPlaying = false; $('pplay').textContent = '▶'; } else if (e.data === 0) ytNext(); },
+      onStateChange: e => { if (e.data === 1 && !ytOn) { try { yt.stopVideo(); } catch (x) {} return; } if (e.data === 1) { playedCur = true; try { audio.pause(); } catch (x) {} stopWatch(); try { announce(); } catch (x) {} try { npPoll(); } catch (x) {} ytPlaying = true; ytErr = 0; try { if (!yt.isMuted()) yt.setVolume(Math.round(+$('vol').value * 100)); } catch (x) {} $('pplay').textContent = '❚❚'; } else if (e.data === 2) { ytPlaying = false; $('pplay').textContent = '▶'; } else if (e.data === 0) ytNext(); },
       onError: () => { if (ytMode === 'up' && upS && upS.plays[upIdx]) { if (upCur) upBad[upCur.id] = 1; if (++ytErr < 8) { upPlayIdx(upIdx, Date.now() / 1000 - (upS.delay || 0) - upS.plays[upIdx].t, upCurAlt + 1); return; } } else if (++ytErr < 6) { ytNext(); return; } else $('pmeta').textContent = (ytMode === 'up' ? '1UP Radio' : 'Billy Legal Radio') + ' is unavailable right now'; } } }); };
     if (window.YT && YT.Player) init(); else { window.onYouTubeIframeAPIReady = init; const sc = document.createElement('script'); sc.src = 'https://www.youtube.com/iframe_api'; document.head.appendChild(sc); }
   }
@@ -982,8 +982,25 @@
     try { MS.setActionHandler('stop', () => { audio.pause(); }); } catch (e) {}
     try { MS.setActionHandler('nexttrack', null); MS.setActionHandler('previoustrack', null); } catch (e) {}
   }
+  // ---------- history tickets: the last three stations you moved on from, as little tickets in the top bar; tap one to go back ----------
+  const histBox = document.createElement('div'); histBox.id = 'hist'; document.body.appendChild(histBox);
+  let hist = [], playedCur = false;   // playedCur: the current station really started playing (failed tries never reach the history)
+  function renderHist() {
+    histBox.innerHTML = hist.map((x, i) => '<button class="tk" data-i="' + i + '" style="--tc:' + stationColor(x) + '" title="Go back to ' + esc(x[0]) + '"><i></i><b>' + esc(x[0]) + '</b>' + (x[12] ? '<small>' + esc(String(x[12]).split(',').pop().trim().slice(0, 14)) + '</small>' : '') + '</button>').join('');
+  }
+  function pushHist(prev) {
+    if (!prev || (!prev[1] && !isBL(prev) && !isUP(prev))) return;
+    hist = [prev, ...hist.filter(x => x[13] !== prev[13])].slice(0, 3); renderHist();
+  }
+  histBox.addEventListener('click', e => {
+    const b = e.target.closest('.tk'); if (!b) return; const s = hist[+b.dataset.i]; if (!s) return;
+    if (locked && current && s[13] !== current[13]) { lockMsg(); return; }
+    randomMode = false; play(s, false); hist = hist.filter(x => x[13] !== s[13]); renderHist(); toast('Back to ' + s[0]);
+    if (s[2] != null) { ctl.autoRotate = false; autoRotate = false; $('rotate').style.opacity = .5; stopFling(); const pov = globe.pointOfView(), dl = ((((s[3] - pov.lng) % 360) + 540) % 360) - 180; globe.pointOfView({ lat: s[2], lng: pov.lng + dl, altitude: pov.altitude }, 1200); }
+  });
   function play(s, fly) {
     if (locked && current && s && s[13] !== current[13]) { lockMsg(); return; }   // the music is locked on this station
+    if (current && s && s[13] !== current[13]) { if (playedCur) pushHist(current); playedCur = false; }
     stopWatch(); try { lyrReset(); } catch (e) {}
     if (isBL(s)) { audio.pause(); if (hls) { hls.destroy(); hls = null; } current = s; detail(s); $('shareBtn').disabled = false; setPlayerLogo(s); $('pplay').disabled = false; ytStart('bl'); pulseT = performance.now(); if (fly) flyTo(s); return; }
     ytStop(); stopWatch();
@@ -1029,6 +1046,12 @@
   const lsGet = k => { try { return JSON.parse(localStorage.getItem(k) || '[]'); } catch (e) { return []; } };
   const lsAdd = (k, v, cap) => { try { const l = lsGet(k).filter(x => x !== v); l.push(v); localStorage.setItem(k, JSON.stringify(l.slice(-cap))); } catch (e) {} };
   const fastOK = s => s[1] && typeof s[1] === 'string' && /^https:/i.test(s[1]) && !/\.(m3u8|pls|m3u)(\?|$)/i.test(s[1]) && (!s[6] || /^(MP3|AAC\+?)$/i.test(s[6]));   // https + direct MP3/AAC connects fastest (http streams are often blocked on an https page)
+  // "energetic" music for the opening spin: hip-hop, country, rock, the 80s, electronic (no chill / ambient / lounge)
+  const ENERGY = { hiphop: /^(Hip-Hop|Old School Hip-Hop|Gangsta Rap|Drill|Grime|Reggaeton|Dancehall|Afrobeats|Funk)$/, country: /^(Country|Honky Tonk|Bluegrass|Western|Americana)$/, rock: /^(Rock|Classic Rock|Hard Rock|Alternative|Punk|Metal|Heavy Metal|Grunge|Pop Rock|Southern Rock|Garage Rock|Blues Rock|New Wave|Rockabilly)$/, eighties: /^80s$/, electronic: /^(House|Tech House|Progressive House|Electro House|Afro House|Techno|Trance|Drum & Bass|Dubstep|Hardstyle|EDM|Electro|Dance|Club|Eurodance|Disco|Big Room|Future Bass|Hands Up|Melodic Techno)$/ };
+  const ENERGY_IDS = {}; for (const k in ENERGY) ENERGY_IDS[k] = new Set(G.filter(g => ENERGY[k].test(g.name)).map(g => g.id));
+  const AVOID_IDS = new Set(G.filter(g => /^(Ambient|Chillout|Lounge|Lo-?fi|Vaporwave|Easy Listening|Beautiful Music|Adult Contemporary|Soft Rock|Smooth Jazz|Jazz|New Age|Meditation|Classical|Talk|News|Sports|Religious|Gospel|Christian|Kids|Variety|Adult Hits|Soul|Neo Soul|R&B|Oldies|Throwback)/i.test(g.name)).map(g => g.id));
+  const energyOf = (s, k) => Array.isArray(s[11]) && s[11].length > 0 && ENERGY_IDS[k].has(s[11][0]) && !s[11].some(i => AVOID_IDS.has(i));   // main genre is energetic and nothing chill is tagged
+  const isEnergetic = s => !!s && Object.keys(ENERGY).some(k => energyOf(s, k));
   const markBad = s => lsAdd('rg-bad', s[13], 300);
   // one sound at a time: whatever just started playing silences every other source (YouTube radios, live-set video, other open tabs of this site)
   let bc = null; try { bc = new BroadcastChannel('rg-player'); } catch (e) {}
@@ -1036,7 +1059,7 @@
   const announce = () => { try { bc && bc.postMessage(tabId); } catch (e) {} };
   if (bc) bc.onmessage = e => { if (e.data !== tabId) { try { audio.pause(); } catch (x) {} if (ytOn) { try { yt.pauseVideo(); } catch (x) {} } } };
   audio.addEventListener('playing', () => { if (ytOn) ytStop(); stopWatch(); announce(); });
-  audio.addEventListener('playing', () => { clearTimeout(wdT); startElec = null; if (current && current[1]) { lsAdd('rg-good', current[13], 80); if (fastOK(current)) { try { const l = lsGet('rg-fast').filter(x => x[0] !== current[13]); l.push([current[13], current[1]]); localStorage.setItem('rg-fast', JSON.stringify(l.slice(-25))); } catch (e) {} } } });
+  audio.addEventListener('playing', () => { playedCur = true; clearTimeout(wdT); startElec = null; if (current && current[1]) { lsAdd('rg-good', current[13], 80); if (fastOK(current)) { try { const l = lsGet('rg-fast').filter(x => x[0] !== current[13]); l.push([current[13], current[1], isEnergetic(current) ? 1 : 0]); localStorage.setItem('rg-fast', JSON.stringify(l.slice(-25))); } catch (e) {} } } });
   // give up on a station that has not produced sound in 3.5 s and try another straight away
   function watchdog(s) {
     clearTimeout(wdT);
@@ -1094,28 +1117,34 @@
       muted = false;
     };
     ['pointerdown', 'keydown', 'touchstart'].forEach(ev => addEventListener(ev, () => { if (tap.style.display !== 'none' || muted) unlock(); }, { passive: true }));
-    // every visit starts on a fresh random Electronic station (1UP Radio is the fallback)
-    const bad0 = new Set(lsGet('rg-bad'));
-    const elecAll = S.filter(s => s[1] && typeof s[1] === 'string' && !isUP(s) && !isBL(s) && s[11].some(g => famOf[g] === 'Electronic'));
-    // opening pool: popular, https, direct MP3/AAC electronic stations (fastest to connect); stations that worked before come first
-    let elec = elecAll.filter(s => fastOK(s) && s[5] >= 20 && !bad0.has(s[13])); if (elec.length < 30) elec = elecAll.filter(s => !bad0.has(s[13]));
-    const goodIds = new Set(lsGet('rg-good')), goodList = elec.filter(s => goodIds.has(s[13]));
-    if (elec.length) {
+    // every visit opens with a little spin and locks onto energetic music (hip-hop, country, rock, 80s, electronic); now and then Billy Legal or 1UP Radio
+    const bad0 = new Set(lsGet('rg-bad')), goodIds = new Set(lsGet('rg-good')), bl = S.find(isBL), poolCache = {};
+    const poolOf = k => poolCache[k] || (poolCache[k] = (() => {
+      const base = S.filter(s => s[1] && typeof s[1] === 'string' && !isUP(s) && !isBL(s) && energyOf(s, k));
+      let p = base.filter(s => fastOK(s) && s[5] >= 20 && !bad0.has(s[13])); if (p.length < 20) p = base.filter(s => fastOK(s) && !bad0.has(s[13])); if (p.length < 5) p = base.filter(s => !bad0.has(s[13]));
+      return p; })());
+    const energetic = () => { const ks = Object.keys(ENERGY), p = poolOf(ks[(Math.random() * ks.length) | 0]); if (!p.length) return null; const gl = p.filter(s => goodIds.has(s[13])), src = gl.length >= 3 && Math.random() < 0.7 ? gl : p; return src[(Math.random() * src.length) | 0]; };
+    const r0 = Math.random(), first = bl && r0 < 0.08 ? bl : up && r0 < 0.16 ? up : energetic() || up;
+    const openSpin = (s, glide) => {   // one full turn of the Earth that ends with the bullseye on the station (a retry just glides there)
+      if (!s || s[2] == null) return; ctl.autoRotate = false; autoRotate = false; $('rotate').style.opacity = .5;
+      if (glide) { const pov = globe.pointOfView(), dl = ((((s[3] - pov.lng) % 360) + 540) % 360) - 180; globe.pointOfView({ lat: s[2], lng: pov.lng + dl, altitude: pov.altitude }, 1200); return; }
+      setTimeout(() => { const alt = globe.pointOfView().altitude; globe.pointOfView({ lat: s[2], lng: s[3] - 340, altitude: alt }, 0); setTimeout(() => globe.pointOfView({ lat: s[2], lng: s[3], altitude: alt }, 2800), 80); }, 900);
+    };
+    if (first && !isUP(first) && !isBL(first)) {
       elecMode = true; let n = 0;
       const early = window.__early && S.find(x => x[13] === window.__early.id); window.__early = null;
-      const pick = () => { if (early && n === 0) { startCur = early; play(early, false); return; } const src = goodList.length >= 3 && Math.random() < 0.7 ? goodList : elec; const s = src[(Math.random() * src.length) | 0]; startCur = s; play(s, false); };
+      const pick = () => { if (early && n === 0) { startCur = early; play(early, false); openSpin(early, false); return; } const s = n === 0 ? first : energetic() || first; startCur = s; play(s, false); openSpin(s, n > 0); };
       startElec = () => { if (++n < 8) pick(); };
       ctl.autoRotate = false; autoRotate = false; $('rotate').style.opacity = .5;
       pick();
       $('panel').classList.add('hidden');   // opens with the info card closed; tap the station name/logo to open it
-    } else if (up) {
-      play(up, false);
+    } else if (first) {
+      play(first, false); openSpin(first); $('panel').classList.add('hidden');
       ctl.autoRotate = false; autoRotate = false; $('rotate').style.opacity = .5;
-      // (opening zoom-in to 1UP Radio removed at Billy's request, 2026-10-12)
       setTimeout(() => {   // browsers block sound before the first tap: fall back to muted autoplay, then unmute on the first touch
-        if (ytPlaying || ytMode !== 'up') return;
+        if (ytPlaying || (ytMode !== 'up' && ytMode !== 'bl')) return;
         try { if (yt && yt.mute) { yt.mute(); yt.playVideo(); muted = true; } } catch (e) {}
-        tap.style.display = 'block';
+        tap.style.display = 'block'; tap.textContent = first === bl ? '▶ Tap to start Billy Legal Radio' : '▶ Tap to start 1UP Radio';
       }, 3500);
       setInterval(() => { if (tap.style.display !== 'none' && ytPlaying && !muted) tap.style.display = 'none'; }, 700);
     }
