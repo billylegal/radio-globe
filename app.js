@@ -71,7 +71,7 @@
     try {
       const d = await (await fetch('data/lyric_stations.json?t=' + Date.now())).json(); if (!d.updated || d.updated === lyricStamp) return; lyricStamp = d.updated;
       lyricSet.clear(); lyricSince.clear(); for (const r of d.items || []) { lyricSet.set(r.u, r.title); if (r.since) lyricSince.set(r.u, { title: r.title, since: r.since, err: r.err }); }
-      const lb = $('lyrbtn'); if (lb) lb.querySelector('small').textContent = lyricSet.size ? lyricSet.size + ' now' : '…'; if (lyricsOnly) applyFilter();
+      const lb = $('lyrbtn'); if (lb) lb.querySelector('small').textContent = lyricSet.size ? lyricSet.size + ' now' : '…'; dirty = true; if (lyricsOnly) applyFilter();
     } catch (e) {}
   }
   loadLyricStations(); setInterval(loadLyricStations, 60000);
@@ -225,6 +225,12 @@
       if (c.bl) { cx.globalAlpha = fade; cx.fillStyle = '#ffd45a'; cx.strokeStyle = '#fff'; cx.lineWidth = 1.2; cx.beginPath(); cx.arc(q.x, q.y, 3.6, 0, 6.2832); cx.fill(); cx.stroke(); scr.push({ x: q.x, y: q.y, r: 3.6, c }); continue; }
       const near = alt < 0.03 ? 1 + (0.03 - alt) / 0.03 * 1.6 : 1;   // a little bigger once you are right on top of a city
       const r = (c.n > 1 ? 1.15 + Math.min(0.5, Math.log2(c.n) * 0.08) : 1.15) * near * (hover === c ? 2 : 1);
+      if (lyricSet.size && c.list.some(st => lyricSet.has(st[13]))) {   // a station here is playing a song with lyrics right now: lit red (blue when the theme itself is red)
+        const lc = RED === '#ff2a2a' ? '#2e8bff' : '#ff2a2a', lr = r + 1.6;
+        cx.globalAlpha = 0.28 * fade; cx.fillStyle = lc; cx.beginPath(); cx.arc(q.x, q.y, lr + 3.5, 0, 6.2832); cx.fill();
+        cx.globalAlpha = fade; cx.fillStyle = lc; cx.beginPath(); cx.arc(q.x, q.y, lr, 0, 6.2832); cx.fill();
+        scr.push({ x: q.x, y: q.y, r: lr, c }); continue;
+      }
       cx.globalAlpha = 0.9 * fade; cx.fillStyle = RED; cx.beginPath(); cx.arc(q.x, q.y, r, 0, 6.2832); cx.fill();
       scr.push({ x: q.x, y: q.y, r, c });
       if (c.n === 1 && alt < 0.012) { const tx = q.x + r + 5, ty = q.y + 4, w = c.list[0][0].length * 6.4; const gk = Math.floor(tx / 90) + ':' + Math.floor(ty / 16); if (!labSeen.has(gk) && !labSeen.has((Math.floor(tx / 90) + 1) + ':' + Math.floor(ty / 16))) { labSeen.add(gk); cx.globalAlpha = fade; cx.font = '600 11px system-ui,sans-serif'; cx.lineWidth = 3; cx.strokeStyle = 'rgba(0,0,0,.75)'; cx.fillStyle = '#fff'; cx.strokeText(c.list[0][0], tx, ty); cx.fillText(c.list[0][0], tx, ty); } }
