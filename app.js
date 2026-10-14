@@ -461,6 +461,7 @@
   }
   async function fetchLyrics(t) {
     const title = t, { artist, track } = parseSong(t); if (!track || track.length < 2) return null;
+    if (/^\s*billy legal\b/i.test(title)) return null;   // Billy's own songs: no verified lyrics source, never guess
     const J = async u => { const r = await fetch(u); return r.ok ? r.json() : null; }, enc = encodeURIComponent;
     const good = d => d && (d.plainLyrics || '').trim().length > 40 && !d.instrumental;
     try {
