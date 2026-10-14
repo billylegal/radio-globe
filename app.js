@@ -1563,6 +1563,7 @@
   });
   // ---------- genre sidebar ----------
   const fams = [...new Set(G.map(g => g.family))].sort((a, b) => (a === 'Other') - (b === 'Other') || a.localeCompare(b, undefined, { sensitivity: 'base' }));   // A-Z, 'Other' last
+  { const ci = fams.indexOf('Country, Folk & Roots'), ri = fams.indexOf('Reggae & Caribbean'); if (ci >= 0 && ri >= 0) { fams.splice(ci, 1); fams.splice(fams.indexOf('Reggae & Caribbean') + 1, 0, 'Country, Folk & Roots'); } }   // Billy: Country, Folk & Roots sits right below Reggae & Caribbean
   function buildGenres(q) {
     q = (q || '').toLowerCase(); let html = '<div class="allrow"><button id="allbtn" class="allbtn' + (filter.kind === 'all' && !lyricsOnly ? ' on' : '') + '">🌍 All stations<small>' + S.length.toLocaleString() + '</small></button><button id="lyrbtn" class="allbtn' + (lyricsOnly ? ' on' : '') + '" title="Only stations playing a song with lyrics right now">🎤 Lyric stations<small>' + (lyricSet.size ? lyricSet.size + ' now' : '…') + '</small></button></div>';
     for (const f of fams) {
