@@ -1,6 +1,6 @@
 (async function () {
   const $ = id => document.getElementById(id);
-  const FAMCOL = {"Electronic":"#4fd1ff","Pop":"#ff6fb5","Rock":"#ff5a4f","Hip-Hop & R&B":"#ffb347","Jazz & Blues":"#c792ff","Classical & Instrumental":"#e9e4a0","Country, Folk & Roots":"#b6e35a","Reggae & Caribbean":"#3ddc84","Latin":"#ff8a3d","World":"#2ee6c8","Decades & Oldies":"#d6a6ff","Spoken & Talk":"#9db4d4","Religious":"#f2f2f2","Vibes & Moods":"#ff9ec7","Other":"#8fa3c8"};
+  const FAMCOL = {"Electronic":"#4fd1ff","Pop":"#ff6fb5","Rock":"#ff5a4f","Hip-Hop, Trap & R&B":"#ffb347","Jazz & Blues":"#c792ff","Classical & Instrumental":"#e9e4a0","Country, Folk & Roots":"#b6e35a","Reggae & Caribbean":"#3ddc84","Latin":"#ff8a3d","World":"#2ee6c8","Decades & Oldies":"#d6a6ff","Spoken & Talk":"#9db4d4","Religious":"#f2f2f2","Vibes & Moods":"#ff9ec7","Other":"#8fa3c8"};
   const NOGENRE = "#8aa0c4";
 
   // ---------- load data ----------
@@ -8,6 +8,7 @@
   const DB = await res.json();
   const G = DB.genres, S = DB.stations;
   G.forEach(g => { if (g.family === 'Classical & Instrumental' || g.family === 'Decades & Oldies') g.family = 'Other'; });   // Billy: these two live under Other
+  G.forEach(g => { if (g.name === 'Trap' || g.family === 'Hip-Hop & R&B') g.family = 'Hip-Hop, Trap & R&B'; });   // Billy: Hip-Hop, Trap and R&B are their own category (Trap moved over from Electronic)
   const famOf = G.map(g => g.family);
   // hand-picked departments: Old-Time Stories (radio drama, audiobooks, old-time radio) and Kids
   const gid = n => { const g = G.find(x => x.name === n); return g ? g.id : -1; };
