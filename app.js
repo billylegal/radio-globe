@@ -7,6 +7,7 @@
   const res = await fetch('data/stations.json', { cache: 'no-cache' });
   const DB = await res.json();
   const G = DB.genres, S = DB.stations;
+  G.forEach(g => { if (g.family === 'Classical & Instrumental' || g.family === 'Decades & Oldies') g.family = 'Other'; });   // Billy: these two live under Other
   const famOf = G.map(g => g.family);
   // hand-picked departments: Old-Time Stories (radio drama, audiobooks, old-time radio) and Kids
   const gid = n => { const g = G.find(x => x.name === n); return g ? g.id : -1; };
