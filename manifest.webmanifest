@@ -1,0 +1,17 @@
+{
+  "name": "A View From Space · Radio Globe",
+  "short_name": "Radio Globe",
+  "description": "Spin the Earth and listen to radio stations from everywhere.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#04060d",
+  "theme_color": "#02050c",
+  "icons": [
+    { "src": "assets/icon/radio-globe-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icon/radio-globe-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icon/radio-globe-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "assets/icon/radio-globe.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

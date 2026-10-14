@@ -1,27 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <defs>
-    <radialGradient id="bg" cx="50%" cy="38%" r="75%"><stop offset="0" stop-color="#16243f"/><stop offset="1" stop-color="#04070f"/></radialGradient>
-    <radialGradient id="ocean" cx="38%" cy="30%" r="80%"><stop offset="0" stop-color="#4aa6e8"/><stop offset=".55" stop-color="#1b5a9e"/><stop offset="1" stop-color="#0a2548"/></radialGradient>
-    <radialGradient id="glow" cx="50%" cy="50%" r="50%"><stop offset=".78" stop-color="#5cb8ff" stop-opacity="0"/><stop offset="1" stop-color="#5cb8ff" stop-opacity=".55"/></radialGradient>
-    <clipPath id="g"><circle cx="256" cy="226" r="150"/></clipPath>
-  </defs>
-  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
-  <g fill="#fff" opacity=".85"><circle cx="60" cy="70" r="2.5"/><circle cx="450" cy="58" r="2"/><circle cx="470" cy="150" r="3"/><circle cx="40" cy="200" r="2"/><circle cx="420" cy="30" r="1.8"/><circle cx="96" cy="34" r="1.8"/></g>
-  <circle cx="256" cy="226" r="166" fill="url(#glow)"/>
-  <circle cx="256" cy="226" r="150" fill="url(#ocean)"/>
-  <g clip-path="url(#g)">
-    <path d="M196 120c20-14 52-12 66 6 10 14-2 26-14 34-8 6-6 18-18 22-16 6-30-6-40-18-8-10-8-34 6-44z" fill="#5da05a"/>
-    <path d="M262 214c18-8 44-4 58 12 12 14 8 36-4 52-8 12-8 30-22 40-12 8-24-2-28-14-6-20-14-30-14-50 0-18 2-32 10-40z" fill="#6aa85a"/>
-    <path d="M330 130c22-10 52 0 62 22 6 14-6 22-20 22-14 0-20 10-34 6-14-4-22-30-8-50z" fill="#7bb065"/>
-    <path d="M150 250c14-6 30 4 36 18 4 10-6 20-18 18-14-2-26-24-18-36z" fill="#5da05a"/>
-    <g fill="none" stroke="#bfe2ff" stroke-opacity=".28" stroke-width="2"><ellipse cx="256" cy="226" rx="150" ry="52"/><ellipse cx="256" cy="226" rx="150" ry="104"/><ellipse cx="256" cy="226" rx="52" ry="150"/><ellipse cx="256" cy="226" rx="104" ry="150"/><path d="M106 226h300M256 76v300"/></g>
-    <circle cx="256" cy="226" r="150" fill="none" stroke="#000" stroke-opacity=".25" stroke-width="30"/>
-  </g>
-  <g fill="#ff2d2d" stroke="#fff" stroke-width="2.5">
-    <circle cx="214" cy="150" r="9"/><circle cx="290" cy="190" r="9"/><circle cx="332" cy="150" r="8"/><circle cx="262" cy="270" r="9"/><circle cx="180" cy="250" r="8"/><circle cx="318" cy="258" r="7"/><circle cx="236" cy="206" r="7"/>
-  </g>
-  <g fill="none" stroke="#ff2d2d" stroke-width="5" stroke-linecap="round" opacity=".9"><path d="M286 156a46 46 0 0 1 0 0"/></g>
-  <circle cx="290" cy="190" r="20" fill="none" stroke="#fff" stroke-width="4" opacity=".9"/>
-  <text x="256" y="446" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-weight="800" font-size="84" letter-spacing="10" fill="#fff">GLOBE</text>
-  <rect x="148" y="462" width="216" height="6" rx="3" fill="#ff2d2d"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+<defs>
+<radialGradient id="bg" cx="50%" cy="45%" r="75%"><stop offset="0" stop-color="#14183a"/><stop offset=".65" stop-color="#080a20"/><stop offset="1" stop-color="#03040d"/></radialGradient>
+<clipPath id="r"><rect width="256" height="256" rx="56"/></clipPath>
+</defs>
+<g clip-path="url(#r)">
+<rect width="256" height="256" fill="url(#bg)"/>
+<g fill="#fff"><circle cx="30" cy="34" r="2"/><circle cx="72" cy="18" r="1.4"/><circle cx="222" cy="36" r="2"/><circle cx="238" cy="104" r="1.4"/><circle cx="20" cy="112" r="1.5"/><circle cx="30" cy="216" r="1.6"/><circle cx="226" cy="222" r="1.8"/></g>
+<g transform="translate(128 128)" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round">
+<path d="M0-114V-70M0 70V114M-114 0H-70M70 0H114" opacity=".95"/>
+<circle r="64" fill="#07101a" fill-opacity=".92"/>
+<circle r="64" stroke="#39ff14" stroke-width="3" opacity=".9" transform="scale(.9)"/>
+<g fill="#39ff14" stroke="none"><path d="M-30 -12H-14L8 -32V32L-14 12H-30Z"/></g>
+<g stroke="#39ff14" stroke-width="6"><path d="M20-14a20 20 0 0 1 0 28"/><path d="M31-27a38 38 0 0 1 0 54"/></g>
+</g>
+</g></svg>
