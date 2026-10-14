@@ -1532,7 +1532,7 @@
       const fn = gs.reduce((a, g) => a + g.n, 0);
       const djChip = f === 'Electronic' && (!q || 'dj mixes'.includes(q)) ? '<span class="chip dj" data-dj="1">🎧 DJ Mixes<small>' + djMixCount() + '</small></span>' : '';
       html += '<div class="fam' + (q ? ' open' : '') + '"><div class="fh" data-fam="' + esc(f) + '"><span class="dot" style="background:' + FAMCOL[f] + '"></span>' + esc(f) + '<span class="caret">›</span></div><div class="gl">' + djChip +
-        gs.sort((a, b) => b.n - a.n).map(g => '<span class="chip' + (filter.kind === 'genre' && filter.id === g.id ? ' on' : '') + '" data-g="' + g.id + '">' + esc(g.name) + '<small>' + g.n + '</small></span>').join('') + '</div></div>';
+        gs.sort(f === 'Electronic' ? (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }) : (a, b) => b.n - a.n).map(g => '<span class="chip' + (filter.kind === 'genre' && filter.id === g.id ? ' on' : '') + '" data-g="' + g.id + '">' + esc(g.name) + '<small>' + g.n + '</small></span>').join('') + '</div></div>';
     }
     for (const k of ['kids', 'stories']) {   // their own categories at the bottom of the list
       const lab = SETS[k].label, nm = lab.replace(/^\S+\s/, '');
