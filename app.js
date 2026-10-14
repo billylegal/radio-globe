@@ -480,7 +480,7 @@
     lyr.key = title; lyr.data = null; lyr.idx = -1; lyr.how = '';
     if (!joined) { lyr.t0 = ((lyr.prevSeen || performance.now()) + performance.now()) / 2; lyr.how = 'live'; }   // we watched the title change: it started between our last two looks
     else { lyr.t0 = null; lyr.adj = 0; const k = current && lyricSince.get(current[13]), same = (x, y) => { x = fold(x); y = fold(y); return x === y || x.includes(y) || y.includes(x); };
-      if (k && k.since && (k.err == null || k.err <= 25) && same(k.title, title)) { lyr.t0 = performance.now() - (Date.now() / 1000 - k.since) * 1000; lyr.how = 'station'; } }   // joined mid-song: the collector saw when it started
+      if (k && k.since && k.err != null && k.err <= 90 && same(k.title, title)) { lyr.t0 = performance.now() - (Date.now() / 1000 - k.since) * 1000; lyr.how = k.err <= 25 ? 'station' : 'approx'; lyr.err = k.err; } }   // joined mid-song: the collector saw when it started
     const my = ++lyr.tok; lyr.looking = !!title; if (!title) { lyrBox.classList.add('hidden'); return; }
     if (lyr.cache.has(title)) { lyr.data = lyr.cache.get(title); lyr.looking = false; return; }
     const d = await fetchLyrics(title); lyr.cache.set(title, d); if (lyr.cache.size > 80) lyr.cache.delete(lyr.cache.keys().next().value);
@@ -518,8 +518,8 @@
       if (!d.sync) { hint.textContent = 'No timing for this song · words only'; return; }
       const p = lyrPos();
       hint.classList.toggle('need', p == null);
-      if (p == null) { hint.textContent = '👆 Tap the line you are hearing and it will follow'; return; }
-      hint.textContent = (lyr.how === 'station' ? 'Following · timed from the station' : 'Following the song') + ' · tap a line to re-sync' + (lyr.adj ? ' · ' + (lyr.adj > 0 ? '+' : '') + lyr.adj.toFixed(1) + 's' : '');
+      if (p == null) { hint.textContent = '👆 Tap the line you hear, or it syncs by itself when the next song starts'; return; }
+      hint.textContent = (lyr.how === 'station' ? 'Following · timed from the station' : lyr.how === 'approx' ? 'Following (about ±' + Math.round(lyr.err) + 's)' : 'Following the song') + ' · tap a line to re-sync' + (lyr.adj ? ' · ' + (lyr.adj > 0 ? '+' : '') + lyr.adj.toFixed(1) + 's' : '');
       let i = -1; for (let k = 0; k < d.sync.length; k++) { if (d.sync[k].t <= p + 0.15) i = k; else break; }
       if (i !== lyr.idx) {
         const rows = $('lyB').children; if (rows[lyr.idx]) rows[lyr.idx].classList.remove('on'); lyr.idx = i;
