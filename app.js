@@ -139,7 +139,7 @@
       try { globe.globeTileEngineUrl(null); } catch (e) {}
     } else {
       try { globe.globeMaterial().visible = true; } catch (e) {}
-      globe.showAtmosphere(true).backgroundImageUrl('vendor/night-sky.png');
+      globe.showAtmosphere(true).backgroundImageUrl(curNebula ? makeNebulaSky() : 'vendor/night-sky.png');
       try { globe.globeTileEngineUrl(TILE_URL); } catch (e) {}
     }
     dirty = true;
@@ -168,21 +168,57 @@
     { id: 'nvg', name: 'Night Vision', c: '#39ff14', ink: '#031200', glass: '8,16,8' }, { id: 'amber', name: 'Tactical Amber', c: '#ffb000', ink: '#1a0f00', glass: '20,14,6' },
     { id: 'alert', name: 'Alert Red', c: '#ff2a2a', ink: '#fff', glass: '20,8,8' }, { id: 'hud', name: 'Cyan HUD', c: '#00e5ff', ink: '#001417', glass: '6,16,22' },
     { id: 'olive', name: 'Olive Drab', c: '#b4ff3c', ink: '#0d1500', glass: '14,18,8' }, { id: 'sand', name: 'Desert Sand', c: '#ffe066', ink: '#1a1500', glass: '20,18,10' },
-    { id: 'flare', name: 'Orange Flare', c: '#ff6a00', ink: '#190800', glass: '20,11,6' }, { id: 'haze', name: 'Purple Haze', c: '#d946ff', ink: '#fff', glass: '16,8,22' } ];
+    { id: 'flare', name: 'Orange Flare', c: '#ff6a00', ink: '#190800', glass: '20,11,6' }, { id: 'haze', name: 'Purple Haze', c: '#d946ff', ink: '#fff', glass: '16,8,22' },
+    { id: 'nebula', name: 'Nebula', c: '#b061ff', ink: '#fff', glass: '11,8,24', nebula: true } ];
+  // Nebula special: the whole Earth turns violet, the sky becomes a painted nebula, the atmosphere glows purple
+  let nebulaSky = null;
+  function makeNebulaSky() {
+    if (nebulaSky) return nebulaSky;
+    const W = 2048, H = 1024, c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
+    g.fillStyle = '#07050f'; g.fillRect(0, 0, W, H);
+    let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const cols = ['139,92,246', '176,97,255', '108,140,255', '92,200,245', '230,70,190', '80,40,160'];
+    g.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 70; i++) {
+      const x = rnd() * W, y = rnd() * H, r = 120 + rnd() * 380, col = cols[i % cols.length], a = 0.05 + rnd() * 0.09;
+      for (const dx of [0, -W, W]) { const gr = g.createRadialGradient(x + dx, y, 0, x + dx, y, r); gr.addColorStop(0, 'rgba(' + col + ',' + a + ')'); gr.addColorStop(1, 'rgba(' + col + ',0)'); g.fillStyle = gr; g.fillRect(x + dx - r, y - r, r * 2, r * 2); }
+    }
+    for (let i = 0; i < 1400; i++) { const x = rnd() * W, y = rnd() * H, b = rnd(); g.fillStyle = 'rgba(' + (b > .8 ? '200,220,255' : '255,255,255') + ',' + (0.25 + b * 0.75) + ')'; g.fillRect(x, y, b > .93 ? 2 : 1, b > .93 ? 2 : 1); }
+    return (nebulaSky = c.toDataURL('image/jpeg', 0.85));
+  }
+  let curNebula = false, tintN = -1;
+  // satellite tiles (MeshLambert) load as you spin/zoom: tint them too, and restore when leaving Nebula
+  function tintTiles() {
+    try {
+      const sc = globe.scene(); let C = null; sc.traverse(o => { if (!C && o.material && o.material.color) C = o.material.color.constructor; }); if (!C) return;
+      const on = curNebula; let n = 0;
+      sc.traverse(o => { const m = o.isMesh && o.material; if (m && m.isMeshLambertMaterial && m.map) { n++; m.color = new C(on ? '#9a6bff' : '#ffffff'); if (m.emissive) m.emissive = new C(on ? '#2a0f6e' : '#000000'); m.emissiveIntensity = on ? 0.55 : 0; m.needsUpdate = true; } });
+      tintN = n;
+    } catch (e) {}
+  }
+  setInterval(() => { if (curNebula || tintN) tintTiles(); }, 700);
+  function applyNebula(on) {
+    curNebula = on;
+    try { const m = globe.globeMaterial(); m.color.set(on ? '#9a6bff' : '#ffffff'); if (m.emissive) { m.emissive.set(on ? '#2a0f6e' : '#000000'); m.emissiveIntensity = on ? 0.55 : 0; } m.needsUpdate = true; } catch (e) {}
+    try { globe.atmosphereColor(on ? '#b061ff' : '#6ab7ff'); } catch (e) {}
+    tintTiles();
+    if (!spaced) { try { globe.backgroundImageUrl(on ? makeNebulaSky() : 'vendor/night-sky.png'); } catch (e) {} }
+  }
   function setTheme(id, save) {
     const t = THEMES.find(x => x.id === id) || THEMES[0], r = document.documentElement.style;
     RED = t.c; REDRGB = [1, 3, 5].map(i => parseInt(t.c.slice(i, i + 2), 16)).join(',');
     r.setProperty('--acc', t.c); r.setProperty('--glass', 'rgba(' + t.glass + ',.76)'); r.setProperty('--glass-solid', 'rgba(' + t.glass + ',.96)'); r.setProperty('--acc-ink', t.ink); r.setProperty('--acc-rgb', REDRGB);
     document.querySelectorAll('#themesw button').forEach(b => b.classList.toggle('on', b.dataset.t === t.id));
     if (save) { try { localStorage.setItem('rg-theme', t.id); } catch (e) {} }
+    applyNebula(!!t.nebula);
     dirty = true;
   }
   $('themesw').innerHTML = THEMES.map(t => '<button data-t="' + t.id + '"><i style="background:' + t.c + '"></i>' + t.name + '</button>').join('');
   $('themesw').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setTheme(b.dataset.t, true); });
-  // every tap on Theme switches to the next of the 8 colors (no popup), on every device
+  // every tap on Theme switches to the next of the 9 looks (no popup), on every device
   $('themeBtn').onclick = e => { e.stopPropagation(); const i = THEMES.findIndex(t => t.c === RED); setTheme(THEMES[(i + 1) % THEMES.length].id, true); };
   document.addEventListener('click', e => { if (!e.target.closest('#themepop') && !e.target.closest('#themeBtn')) $('themepop').classList.add('hidden'); });
-  try { setTheme(localStorage.getItem('rg-theme') || 'nvg'); } catch (e) { setTheme('nvg'); }
+  try { setTheme(localStorage.getItem('rg-theme') || 'nebula'); } catch (e) { setTheme('nebula'); }
   function project(lat, lng, alt) {
     const cam = globe.camera(), p = globe.getCoords(lat, lng, alt);
     const v = cam.position.clone().set(p.x, p.y, p.z);
