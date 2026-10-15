@@ -499,3 +499,20 @@ body.locked #randomBar{opacity:.35}
 #panel:not(.hidden) ~ #hist{display:none}
 #hist .tk{height:30px;padding:0 11px;font-size:11.5px;flex:0 1 auto;min-width:0;max-width:calc((100% - 16px) / 3)}#hist .tk b{max-width:none;flex:1;min-width:0}#hist .tk small{display:none}}
 @media(prefers-reduced-motion:reduce){#hist .tk{animation:none}}
+
+/* ===== Nebula skin (theme "Nebula"): animated wallpaper + violet glass UI, like the Legal Desk / 1UP skins ===== */
+#nebwall{position:fixed;inset:0;z-index:0;overflow:hidden;background:#07050f center/cover no-repeat;pointer-events:none}
+#nebwall i{position:absolute;width:90vmax;height:90vmax;border-radius:50%;filter:blur(60px);opacity:.55;will-change:transform;mix-blend-mode:screen}
+#nebwall i:nth-child(1){left:-30vmax;top:-30vmax;background:radial-gradient(closest-side,#6a2bff,transparent);animation:nebA 38s ease-in-out infinite alternate}
+#nebwall i:nth-child(2){right:-35vmax;bottom:-35vmax;background:radial-gradient(closest-side,#d02bb0,transparent);animation:nebB 46s ease-in-out infinite alternate}
+#nebwall i:nth-child(3){left:20vmax;top:25vmax;width:60vmax;height:60vmax;background:radial-gradient(closest-side,#2b8cff,transparent);opacity:.35;animation:nebC 55s ease-in-out infinite alternate}
+@keyframes nebA{to{transform:translate(25vmax,18vmax) scale(1.2)}}@keyframes nebB{to{transform:translate(-22vmax,-16vmax) scale(1.15)}}@keyframes nebC{to{transform:translate(-18vmax,12vmax) scale(.8)}}
+body.skin-nebula #globe{z-index:1}
+body.skin-nebula #side,body.skin-nebula #panel,body.skin-nebula #player,body.skin-nebula #favdrawer,body.skin-nebula #themepop,body.skin-nebula #sresults{background:linear-gradient(160deg,rgba(54,26,128,.78),rgba(9,6,20,.88))!important;border:1px solid rgba(139,92,246,.7);border-radius:20px;box-shadow:0 0 0 1px rgba(255,255,255,.05) inset,0 10px 40px rgba(80,30,200,.35),0 0 26px rgba(139,92,246,.22);backdrop-filter:blur(18px) saturate(1.3)}
+body.skin-nebula #player{border-radius:999px;padding:10px 18px}
+body.skin-nebula #topbar button,body.skin-nebula #searchwrap input,body.skin-nebula .brand #themeBtn{background:linear-gradient(160deg,rgba(60,30,140,.7),rgba(12,8,30,.8))!important;border:1px solid rgba(139,92,246,.6);border-radius:999px;box-shadow:0 0 14px rgba(139,92,246,.25)}
+body.skin-nebula #topbar button:hover,body.skin-nebula .brand #themeBtn:hover{box-shadow:0 0 20px rgba(176,97,255,.7);border-color:#cc8cff}
+body.skin-nebula .chip,body.skin-nebula .allbtn,body.skin-nebula input[type=search]{border-radius:999px}
+body.skin-nebula .chip.on,body.skin-nebula .allbtn.on,body.skin-nebula .allrow .on{background:linear-gradient(135deg,#8b5cf6,#5cc8f5);color:#fff;box-shadow:0 0 14px rgba(139,92,246,.6)}
+body.skin-nebula #pplay{background:linear-gradient(135deg,#8b5cf6,#5cc8f5)!important;color:#fff!important;box-shadow:0 0 22px rgba(139,92,246,.8)}
+body.skin-nebula #pname{color:#e6e1fa;text-shadow:0 0 12px rgba(176,97,255,.6)}

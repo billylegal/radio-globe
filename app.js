@@ -135,11 +135,11 @@
     if (save) { try { localStorage.setItem('rg-spaced', on ? '1' : '0'); } catch (e) {} }
     if (on) {
       try { globe.globeMaterial().visible = false; } catch (e) {}
-      globe.showAtmosphere(false).backgroundImageUrl(null).backgroundColor('#02050c');
+      globe.showAtmosphere(false).backgroundImageUrl(null).backgroundColor('#02050c'); { const w = $('nebwall'); if (w) w.style.display = 'none'; }
       try { globe.globeTileEngineUrl(null); } catch (e) {}
     } else {
       try { globe.globeMaterial().visible = true; } catch (e) {}
-      globe.showAtmosphere(true).backgroundImageUrl(curNebula ? makeNebulaSky() : 'vendor/night-sky.png');
+      globe.showAtmosphere(true); if (curNebula) globe.backgroundImageUrl(null).backgroundColor('rgba(0,0,0,0)'); else globe.backgroundImageUrl('vendor/night-sky.png'); { const w = $('nebwall'); if (w) w.style.display = curNebula ? '' : 'none'; }
       try { globe.globeTileEngineUrl(TILE_URL); } catch (e) {}
     }
     dirty = true;
@@ -202,7 +202,10 @@
     try { const m = globe.globeMaterial(); m.color.set(on ? '#9a6bff' : '#ffffff'); if (m.emissive) { m.emissive.set(on ? '#2a0f6e' : '#000000'); m.emissiveIntensity = on ? 0.55 : 0; } m.needsUpdate = true; } catch (e) {}
     try { globe.atmosphereColor(on ? '#b061ff' : '#6ab7ff'); } catch (e) {}
     tintTiles();
-    if (!spaced) { try { globe.backgroundImageUrl(on ? makeNebulaSky() : 'vendor/night-sky.png'); } catch (e) {} }
+    document.body.classList.toggle('skin-nebula', on);
+    let w = $('nebwall'); if (on && !w) { w = document.createElement('div'); w.id = 'nebwall'; w.innerHTML = '<i></i><i></i><i></i>'; document.body.insertBefore(w, $('globe')); }
+    if (w) { w.style.backgroundImage = on ? 'url(' + makeNebulaSky() + ')' : ''; w.style.display = on && !spaced ? '' : 'none'; }
+    if (!spaced) { try { on ? globe.backgroundImageUrl(null).backgroundColor('rgba(0,0,0,0)') : globe.backgroundImageUrl('vendor/night-sky.png').backgroundColor('#000011'); } catch (e) {} }
   }
   function setTheme(id, save) {
     const t = THEMES.find(x => x.id === id) || THEMES[0], r = document.documentElement.style;
