@@ -596,7 +596,7 @@
     toast(on ? '🔒 Music locked' + (current ? ' on ' + current[0] : '') + ' · you can still spin and zoom' : '🔓 Unlocked');
   }
   // the lock button floats just above the Save song button, nearly see-through
-  const placeLock = () => { const sv = $('saveSong'), b = $('lockBtn'); if (!sv || !b) return; const r = sv.getBoundingClientRect(); if (!r.width) return; b.style.left = Math.round(r.left + r.width / 2 - b.offsetWidth / 2) + 'px'; b.style.top = Math.round(r.top - b.offsetHeight - 6) + 'px'; };
+  const placeLock = () => { const sv = $('saveSong'), b = $('lockBtn'), sl = $('lockSlot'); if (!sv || !b) return; const sr = sl && sl.getBoundingClientRect(); if (sr && sr.width) { b.style.left = Math.round(sr.left + sr.width / 2 - b.offsetWidth / 2) + 'px'; b.style.top = Math.round(sr.top + sr.height / 2 - b.offsetHeight / 2) + 'px'; return; } const r = sv.getBoundingClientRect(); if (!r.width) return; b.style.left = Math.round(r.left + r.width / 2 - b.offsetWidth / 2) + 'px'; b.style.top = Math.round(r.top - b.offsetHeight - 6) + 'px'; };
   { const pl = $('player'); try { new ResizeObserver(placeLock).observe(pl); } catch (e) {} addEventListener('resize', placeLock); setInterval(placeLock, 1000); placeLock(); }
   $('lockBtn').onclick = () => setLock(!locked);
 
