@@ -20,7 +20,16 @@
   for (const k in SETS) { const d = SETS[k]; d.test = s => s[11].some(i => d.ids.includes(i)) || (d.re.test(s[0] + ' ' + (s[18] || '')) && !(d.no && d.no.test(s[0]))); }
 
   let revealed = false;
-  function reveal() { if (revealed) return; revealed = true; const l = $('loading'); l.classList.add('fading'); setTimeout(() => l.classList.add('hidden'), 650); }
+  function reveal() {   // the globe is ready: the startup screen now waits for PUSH START (a real tap, which also lets phones play sound)
+    if (revealed) return; revealed = true;
+    const l = $('loading'), b = $('ldStart'), m = $('loadmsg');
+    const go = () => { if (l.classList.contains('fading')) return; l.classList.add('fading'); setTimeout(() => l.classList.add('hidden'), 650); };
+    if (!b) { go(); return; }
+    if (m) m.style.display = 'none';
+    b.disabled = false; b.classList.add('ready'); try { b.focus({ preventScroll: true }); } catch (e) {}
+    b.addEventListener('click', go);
+    addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && !l.classList.contains('hidden')) { e.preventDefault(); go(); } });
+  }
   setTimeout(reveal, 7000);   // never keep the cover up for ever
 
   // ---------- state ----------
@@ -118,21 +127,22 @@
   function schedule() { clearTimeout(tmr); tmr = setTimeout(() => { const a = globe.pointOfView().altitude; if (Math.abs(a - lastAlt) / Math.max(a, .05) > 0.12) refreshPoints(); }, 140); }
   function refreshLabels() {
     const pov = globe.pointOfView(), a = pov.altitude;
-    if (!cities.length || a > 0.03) { globe.labelsData([]); return; }
+    if (!cities.length || a > 0.03) { globe.labelsData(skyTw && conList ? conList : []); return; }   // zoomed out: the constellation names (Celestial extras) instead of city names
     const span = a * 40 + 0.15, min = a > 0.015 ? 1e6 : a > 0.008 ? 1e5 : 0;
     const list = []; for (const c of cities) { if (c[6] < min) continue; if (Math.abs(c[2] - pov.lat) > span || Math.abs(((c[3] - pov.lng + 540) % 360) - 180) > span / Math.max(0.2, Math.cos(pov.lat * Math.PI / 180))) continue; list.push(c); if (list.length >= 45) break; }
     globe.labelsData(list);
   }
   function refreshPoints() { refreshLabels(); const a = globe.pointOfView().altitude; lastAlt = a; cells = cluster(a); dirty = true; }
   // stop auto-rotation once the user grabs the globe
-  ctl.addEventListener('start', () => { ctl.autoRotate = false; autoRotate = false; $('rotate').style.opacity = .5; });
+  ctl.addEventListener('start', () => { ctl.autoRotate = false; });   // the spin only pauses while you hold the globe; the Spin button is the only way to switch it off
 
   // ---------- "Ghost" view: no globe, only the station dots ----------
   const TILE_URL = (x, y, l) => 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/' + l + '/' + y + '/' + x;
-  let spaced = false, roloOn = false;
+  let spaced = false, roloOn = false, skyOn = false, nebOn = false;   // skyOn = Celestial view (star chart), nebOn = Nebula view (violet Earth + painted nebula sky)
   function setSpaced(on, save) {
-    spaced = on; $('spaceBtn').classList.toggle('on', on); $('spaceBtn').style.opacity = 1; $('spaceBtn').textContent = roloOn ? '🎞 Rolodex' : on ? '👻 Ghost' : '🌍 Earth'; $('spaceBtn').title = 'View: Earth, Ghost or Rolodex (tap to switch)';
+    spaced = on; $('spaceBtn').classList.toggle('on', on); $('spaceBtn').style.opacity = 1; $('spaceBtn').textContent = roloOn ? '🎞 Rolodex' : on ? '👻 Ghost' : skyOn ? '✨ Celestial' : nebOn ? '🌌 Nebula' : '🌍 Earth'; $('spaceBtn').title = 'View: Celestial, Nebula, Earth, Ghost or Rolodex (tap to switch)';
     if (save) { try { localStorage.setItem('rg-spaced', on ? '1' : '0'); } catch (e) {} }
+    applySky(skyOn && !on);
     if (on) {
       try { globe.globeMaterial().visible = false; } catch (e) {}
       globe.showAtmosphere(false).backgroundImageUrl(null).backgroundColor('#02050c'); { const w = $('nebwall'); if (w) w.style.display = 'none'; }
@@ -140,10 +150,118 @@
     } else {
       try { globe.globeMaterial().visible = true; } catch (e) {}
       globe.showAtmosphere(true); if (curNebula) globe.backgroundImageUrl(null).backgroundColor('rgba(0,0,0,0)'); else globe.backgroundImageUrl('vendor/night-sky.png'); { const w = $('nebwall'); if (w) w.style.display = curNebula ? '' : 'none'; }
-      try { globe.globeTileEngineUrl(TILE_URL); } catch (e) {}
+      try { globe.globeTileEngineUrl(skyOn ? null : TILE_URL); } catch (e) {}   // the Celestial view is a painted star chart: no satellite tiles on top of it
     }
     dirty = true;
   }
+
+  // Sky view: the globe becomes a celestial globe (star chart with grid, ecliptic and constellations); the radio stations are the stars on it
+  function applySky(on) {
+    try {
+      if (on) {
+        globe.globeImageUrl('vendor/celestial-sky.jpg').bumpImageUrl(null); globe.globeTileEngineUrl(null);
+        const m = globe.globeMaterial(); m.color.set('#ffffff'); if (m.emissive) { m.emissive.set('#000000'); m.emissiveIntensity = 0; } m.needsUpdate = true;   // the chart in its own colours (no violet tint)
+        globe.atmosphereColor('#b061ff').atmosphereAltitude(0.14);
+      } else if (document.body.classList.contains('sky-on')) {
+        globe.globeImageUrl('vendor/earth-blue-marble.jpg').bumpImageUrl('vendor/earth-topology.png'); globe.atmosphereAltitude(0.18);
+        applyNebula(nebOn);
+        if (!spaced) { try { globe.globeTileEngineUrl(TILE_URL); } catch (e) {} }
+      }
+    } catch (e) {}
+    document.body.classList.toggle('sky-on', on); tintTiles();
+    applySkyDetail(); convoyOn(on);
+  }
+  // ---- Celestial extras (one side button): constellation names, twinkling stations, country outlines. Off until you press it; remembered. ----
+  var skyDetail = false, skyTw = false, skyBtn = null, skyData = null, conList = null;
+  skyDetail = true;   // the app always opens in Celestial with the gold sky details on (names, outlines, twinkle); the star button switches them off for this visit
+  function loadSkyData() {
+    return skyData || (skyData = Promise.all([fetch('vendor/constellations.json').then(r => r.json()), fetch('vendor/countries-110m.json').then(r => r.json())])
+      .then(([con, geo]) => ({ con: con.map(k => [k.n, 0, k.lat, k.lng, 0, 0, 5e6]), countries: geo.features }))   // same array shape as the city labels, so the same label styling applies
+      .catch(() => { skyData = null; return { con: [], countries: [] }; }));
+  }
+  var lightsOff = false, lightsBtn = null, skyLightsOff = false;
+  function applySkyDetail() {
+    if (!skyBtn) {
+      skyBtn = document.createElement('button'); skyBtn.id = 'skyBtn'; skyBtn.type = 'button'; skyBtn.textContent = '✦';
+      skyBtn.title = 'Sky details: constellation names, twinkling stations, country outlines'; skyBtn.setAttribute('aria-label', 'Sky details');
+      document.body.appendChild(skyBtn);
+      skyBtn.addEventListener('click', e => { e.stopPropagation(); skyDetail = !skyDetail; applySkyDetail(); });
+      lightsBtn = document.createElement('button'); lightsBtn.id = 'lightsBtn'; lightsBtn.type = 'button'; lightsBtn.textContent = '💡';
+      lightsBtn.title = 'Lights off: hide the station lights and show the world outline'; lightsBtn.setAttribute('aria-label', 'Station lights');
+      document.body.appendChild(lightsBtn);
+      lightsBtn.addEventListener('click', e => { e.stopPropagation(); lightsOff = !lightsOff; applySkyDetail(); });
+    }
+    const sky = document.body.classList.contains('sky-on');
+    const on = skyDetail && sky;                 // names + twinkle
+    skyLightsOff = lightsOff && sky;             // station lights hidden, the world outline in light blue
+    const outlines = on || skyLightsOff;
+    skyBtn.classList.toggle('on', skyDetail); skyBtn.setAttribute('aria-pressed', skyDetail ? 'true' : 'false');
+    lightsBtn.classList.toggle('on', lightsOff); lightsBtn.setAttribute('aria-pressed', lightsOff ? 'true' : 'false');
+    document.body.classList.toggle('sky-lights-off', skyLightsOff);
+    skyTw = on && !skyLightsOff;
+    try {
+      if (outlines) loadSkyData().then(d => {
+        if (!document.body.classList.contains('sky-on')) return;
+        conList = (skyDetail && !skyLightsOff) ? d.con : null; refreshLabels();
+        const line = skyLightsOff ? 'rgba(120,215,235,.95)' : 'rgba(120,215,235,.62)';   // the world outline is always the light blue of the grid lines (lights on: softer), so the gold constellations stand out
+        globe.polygonsData(d.countries).polygonCapColor(() => 'rgba(0,0,0,0)').polygonSideColor(() => 'rgba(0,0,0,0)').polygonStrokeColor(() => line).polygonAltitude(0.001).polygonsTransitionDuration(0);
+      });
+      else { conList = null; refreshLabels(); globe.polygonsData([]); }
+    } catch (e) {}
+    dirty = true;
+  }
+  // ---- Celestial convoy: the Omarchy Store shuttle tows the 1UP Radio sticker and then Billy Legal on gold wires, along the bottom, then along the top ----
+  var cvx = null, cvRun = false, cvS = 0, cvLast = 0, cvYb = 600, cvYt = 130, cvChk = 0;
+  const CV_D1 = 150, CV_D2 = 118, CV_M = 540;   // spacing shuttle->1UP, 1UP->Billy, and the off-screen margin where the path turns round
+  function cvBuild() {
+    cvx = document.createElement('div'); cvx.id = 'convoy'; cvx.setAttribute('aria-hidden', 'true');
+    const fl = document.querySelector('.shy .fl'), flame = fl ? fl.outerHTML.replace(/\bfo2\b/g, 'cvfo2').replace(/\bfm2\b/g, 'cvfm2') : '';   // own gradient names: the originals sit in the hidden old shuttle and would paint nothing
+    cvx.innerHTML = '<svg class="cvW"><path id="cvW1"/><path id="cvW2"/></svg>'
+      + '<a class="cvB" href="https://billylegal.com" target="_blank" rel="noopener" title="Billy Legal" aria-label="Billy Legal"><span class="cvI"><img src="assets/head.png" alt=""></span></a>'
+      + '<a class="cvU" href="https://1upradio.com" target="_blank" rel="noopener" title="1UP Radio" aria-label="1UP Radio"><span class="cvI"><img src="assets/1up-sticker.png" alt=""></span></a>'
+      + '<a class="cvS" href="https://omarchystore.com" target="_blank" rel="noopener" title="Omarchy Store" aria-label="Omarchy Store"><span class="cvI">' + flame + '<img src="assets/omarchy-store.png" alt=""></span></a>';
+    document.body.appendChild(cvx);
+    cvx.S = cvx.querySelector('.cvS'); cvx.U = cvx.querySelector('.cvU'); cvx.B = cvx.querySelector('.cvB'); cvx.W1 = cvx.querySelector('#cvW1'); cvx.W2 = cvx.querySelector('#cvW2');
+  }
+  function cvPos(s) {   // one lap: bottom edge right->left, off screen, then top edge right->left
+    const W = innerWidth, L = W + 2 * CV_M, T = 2 * L; s = ((s % T) + T) % T;
+    return s < L ? { x: W + CV_M - s, y: cvYb, d: -1 } : { x: W + CV_M - (s - L), y: cvYt, d: -1 };   // both passes fly leftward, so the shuttle (which faces left) is never mirrored
+  }
+  function cvLayout() {
+    try {
+      const pl = $('player').getBoundingClientRect(), sw = $('searchwrap').getBoundingClientRect();
+      cvYb = Math.max(160, Math.min(innerHeight - 110, pl.top - 66)); cvYt = Math.max(120, sw.bottom + 62);
+    } catch (e) {}
+  }
+  function cvPlace(el, p, t, ph, flip) {
+    const w = el.offsetWidth, h = el.offsetHeight, y = p.y + Math.sin(t * 2.2 + ph) * 6;
+    el.style.transform = 'translate3d(' + (p.x - w / 2).toFixed(1) + 'px,' + (y - h / 2).toFixed(1) + 'px,0)';
+    const i = el.firstChild; if (i) i.style.transform = flip ? (p.d > 0 ? 'scaleX(-1) rotate(-6deg)' : 'rotate(6deg)') : (p.d > 0 ? 'rotate(4deg)' : 'rotate(-4deg)');   // only the shuttle turns to face the way it flies; the stickers keep their lettering the right way round
+    return { x: p.x, y, w, d: p.d };
+  }
+  function cvWire(path, a, b, t, ph) {   // a gold wire from the rear of one piece to the front of the next, with a little wave travelling along it
+    if (a.d !== b.d || Math.abs(a.y - b.y) > 90) { path.setAttribute('d', ''); return; }
+    const x1 = a.x - a.d * a.w * 0.46, x2 = b.x + b.d * b.w * 0.46, y1 = a.y + 2, y2 = b.y, mx = (x1 + x2) / 2, my = (y1 + y2) / 2 + Math.sin(t * 2.6 + ph) * 9;
+    path.setAttribute('d', 'M' + x1.toFixed(1) + ' ' + y1.toFixed(1) + ' Q' + mx.toFixed(1) + ' ' + my.toFixed(1) + ' ' + x2.toFixed(1) + ' ' + y2.toFixed(1));
+  }
+  function cvTick(now) {
+    if (!cvRun) return;
+    if (document.hidden) { cvLast = 0; requestAnimationFrame(cvTick); return; }
+    const dt = cvLast ? Math.min(0.1, (now - cvLast) / 1000) : 0; cvLast = now;
+    if (now - cvChk > 700) { cvChk = now; cvLayout(); }
+    cvS += Math.max(55, innerWidth / 26) * dt;
+    const t = now / 1000, a = cvPlace(cvx.S, cvPos(cvS), t, 0, true), b = cvPlace(cvx.U, cvPos(cvS - CV_D1), t, 1.3), c = cvPlace(cvx.B, cvPos(cvS - CV_D1 - CV_D2), t, 2.6);
+    cvWire(cvx.W1, a, b, t, 0.4); cvWire(cvx.W2, b, c, t, 1.7);
+    requestAnimationFrame(cvTick);
+  }
+  function convoyOn(on) {
+    if (!on) { cvRun = false; return; }
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (!cvx) cvBuild();
+    cvLayout(); if (!cvS) cvS = CV_M + 40;
+    if (!cvRun) { cvRun = true; cvLast = 0; requestAnimationFrame(cvTick); }
+  }
+   // keeps the stations twinkling while the extras are on
 
   function onCell(c) {
     if (c.live) { liveWatch(c.live); return; } if (c.ev) { openLive('events'); return; }
@@ -168,8 +286,7 @@
     { id: 'nvg', name: 'Night Vision', c: '#39ff14', ink: '#031200', glass: '8,16,8' }, { id: 'amber', name: 'Tactical Amber', c: '#ffb000', ink: '#1a0f00', glass: '20,14,6' },
     { id: 'alert', name: 'Alert Red', c: '#ff2a2a', ink: '#fff', glass: '20,8,8' }, { id: 'hud', name: 'Cyan HUD', c: '#00e5ff', ink: '#001417', glass: '6,16,22' },
     { id: 'olive', name: 'Olive Drab', c: '#b4ff3c', ink: '#0d1500', glass: '14,18,8' }, { id: 'sand', name: 'Desert Sand', c: '#ffe066', ink: '#1a1500', glass: '20,18,10' },
-    { id: 'flare', name: 'Orange Flare', c: '#ff6a00', ink: '#190800', glass: '20,11,6' }, { id: 'haze', name: 'Purple Haze', c: '#d946ff', ink: '#fff', glass: '16,8,22' },
-    { id: 'nebula', name: 'Nebula', c: '#b061ff', ink: '#fff', glass: '11,8,24', nebula: true } ];
+    { id: 'flare', name: 'Orange Flare', c: '#ff6a00', ink: '#190800', glass: '20,11,6' }, { id: 'haze', name: 'Purple Haze', c: '#d946ff', ink: '#fff', glass: '16,8,22' } ];
   // Nebula special: the whole Earth turns violet, the sky becomes a painted nebula, the atmosphere glows purple
   let nebulaSky = null;
   function makeNebulaSky() {
@@ -192,15 +309,17 @@
     try {
       const sc = globe.scene(); let C = null; sc.traverse(o => { if (!C && o.material && o.material.color) C = o.material.color.constructor; }); if (!C) return;
       const on = curNebula; let n = 0;
-      sc.traverse(o => { const m = o.isMesh && o.material; if (m && m.isMeshLambertMaterial && m.map) { n++; m.color = new C(on ? '#9a6bff' : '#ffffff'); if (m.emissive) m.emissive = new C(on ? '#2a0f6e' : '#000000'); m.emissiveIntensity = on ? 0.55 : 0; m.needsUpdate = true; } });
+      
+      sc.traverse(o => { const m = o.isMesh && o.material; if (m && m.isMeshLambertMaterial && m.map) { n++; o.visible = !skyOn;   // Celestial: hide any satellite tiles that were already loaded
+        m.color = new C(on ? '#9a6bff' : '#ffffff'); if (m.emissive) m.emissive = new C(on ? '#2a0f6e' : '#000000'); m.emissiveIntensity = on ? 0.55 : 0; m.needsUpdate = true; } });
       tintN = n;
     } catch (e) {}
   }
-  setInterval(() => { if (curNebula || tintN) tintTiles(); }, 700);
+  setInterval(() => { if (curNebula || tintN || skyOn) tintTiles(); }, 700);
   function applyNebula(on) {
     curNebula = on;
-    try { const m = globe.globeMaterial(); m.color.set(on ? '#9a6bff' : '#ffffff'); if (m.emissive) { m.emissive.set(on ? '#2a0f6e' : '#000000'); m.emissiveIntensity = on ? 0.55 : 0; } m.needsUpdate = true; } catch (e) {}
-    try { globe.atmosphereColor(on ? '#b061ff' : '#6ab7ff'); } catch (e) {}
+    try { if (!document.body.classList.contains('sky-on')) { const m = globe.globeMaterial(); m.color.set(on ? '#9a6bff' : '#ffffff'); if (m.emissive) { m.emissive.set(on ? '#2a0f6e' : '#000000'); m.emissiveIntensity = on ? 0.55 : 0; } m.needsUpdate = true; } } catch (e) {}
+    try { if (!document.body.classList.contains('sky-on')) globe.atmosphereColor(on ? '#b061ff' : '#6ab7ff'); } catch (e) {}
     tintTiles();
     document.body.classList.toggle('skin-nebula', on);
     let w = $('nebwall'); if (on && !w) { w = document.createElement('div'); w.id = 'nebwall'; w.innerHTML = '<i></i><i></i><i></i>'; document.body.insertBefore(w, $('globe')); }
@@ -213,15 +332,15 @@
     r.setProperty('--acc', t.c); r.setProperty('--glass', 'rgba(' + t.glass + ',.76)'); r.setProperty('--glass-solid', 'rgba(' + t.glass + ',.96)'); r.setProperty('--acc-ink', t.ink); r.setProperty('--acc-rgb', REDRGB);
     document.querySelectorAll('#themesw button').forEach(b => b.classList.toggle('on', b.dataset.t === t.id));
     if (save) { try { localStorage.setItem('rg-theme', t.id); } catch (e) {} }
-    applyNebula(!!t.nebula);
+    applyNebula(nebOn);
     dirty = true;
   }
   $('themesw').innerHTML = THEMES.map(t => '<button data-t="' + t.id + '"><i style="background:' + t.c + '"></i>' + t.name + '</button>').join('');
   $('themesw').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setTheme(b.dataset.t, true); });
-  // every tap on Theme switches to the next of the 9 looks (no popup), on every device
+  // every tap on Theme switches to the next of the 8 colours (no popup), on every device
   $('themeBtn').onclick = e => { e.stopPropagation(); const i = THEMES.findIndex(t => t.c === RED); setTheme(THEMES[(i + 1) % THEMES.length].id, true); };
   document.addEventListener('click', e => { if (!e.target.closest('#themepop') && !e.target.closest('#themeBtn')) $('themepop').classList.add('hidden'); });
-  try { setTheme(localStorage.getItem('rg-theme') || 'nebula'); } catch (e) { setTheme('nebula'); }
+  try { setTheme((x => (x === 'nebula' || x === 'celestial') ? 'haze' : x)(localStorage.getItem('rg-theme')) || 'haze'); } catch (e) { setTheme('haze'); }
   function project(lat, lng, alt) {
     const cam = globe.camera(), p = globe.getCoords(lat, lng, alt);
     const v = cam.position.clone().set(p.x, p.y, p.z);
@@ -244,10 +363,11 @@
   let drawnAt = 0;
   function frame() {   // called right after every WebGL render, so the dots are always painted for the exact camera the globe was just drawn with
     drawnAt = performance.now();
+    if (skyTw && !document.hidden) dirty = true;   // twinkle: repaint every rendered frame while the Celestial extras are on, so it fades smoothly
     const cam = globe.camera(), key = cam.position.x.toFixed(3) + cam.position.y.toFixed(3) + cam.position.z.toFixed(3) + innerWidth;
     const lv = level(), pulsing = (current && (lv > 0 || performance.now() - pulseT < 3000)) || liveItems.length > 0;
     if (key === lastCam && !dirty && !pulsing) return;
-    draw(lv);
+    draw(lv); placeHoverMag();
   }
   function draw(lv) {
     if (lv === undefined) lv = level();
@@ -261,17 +381,23 @@
     for (const c of cells) {
       const q = project(c.lat, c.lng, 0.0015);
       if (q.behind || q.vis <= 0 || q.x < -20 || q.y < -20 || q.x > innerWidth + 20 || q.y > innerHeight + 20) continue;
-      const fade = Math.min(1, q.cosv / 0.12);
+      const fade = skyLightsOff ? 0 : Math.min(1, q.cosv / 0.12);   // Celestial "lights off": the station dots are not painted (they can still be picked)
       if (c.bl) { cx.globalAlpha = fade; cx.fillStyle = '#ffd45a'; cx.strokeStyle = '#fff'; cx.lineWidth = 1.2; cx.beginPath(); cx.arc(q.x, q.y, 3.6, 0, 6.2832); cx.fill(); cx.stroke(); scr.push({ x: q.x, y: q.y, r: 3.6, c }); continue; }
       const near = alt < 0.03 ? 1 + (0.03 - alt) / 0.03 * 1.6 : 1;   // a little bigger once you are right on top of a city
-      const r = (c.n > 1 ? 1.15 + Math.min(0.5, Math.log2(c.n) * 0.08) : 1.15) * near * (hover === c ? 2 : 1);
+      const r = (c.n > 1 ? 1.15 + Math.min(0.5, Math.log2(c.n) * 0.08) : 1.15) * near;
       if (lyricSet.size && c.list.some(st => lyricSet.has(st[13]))) {   // a station here is playing a song with lyrics right now: lit red (blue when the theme itself is red)
         const lc = RED === '#ff2a2a' ? '#2e8bff' : '#ff2a2a', lr = r + 1.6;
         cx.globalAlpha = 0.28 * fade; cx.fillStyle = lc; cx.beginPath(); cx.arc(q.x, q.y, lr + 3.5, 0, 6.2832); cx.fill();
         cx.globalAlpha = fade; cx.fillStyle = lc; cx.beginPath(); cx.arc(q.x, q.y, lr, 0, 6.2832); cx.fill();
         scr.push({ x: q.x, y: q.y, r: lr, c }); continue;
       }
-      cx.globalAlpha = 0.9 * fade; cx.fillStyle = RED; cx.beginPath(); cx.arc(q.x, q.y, r, 0, 6.2832); cx.fill();
+      if (skyTw) {   // Celestial extras: a slow, smooth shimmer. Crisp dots (no halos, which looked blurry): brightness and size breathe a little, with a tiny bright core
+        const tw = Math.sin(performance.now() / 1300 + c.lat * 3.1 + c.lng * 1.7) * 0.5 + 0.5;   // 0..1, one breath about every 8 s, each dot on its own timing
+        cx.globalAlpha = (0.78 + 0.22 * tw) * fade; cx.fillStyle = RED; cx.beginPath(); cx.arc(q.x, q.y, r * (0.94 + 0.16 * tw), 0, 6.2832); cx.fill();
+        if (r > 1.3) { cx.globalAlpha = 0.5 * tw * fade; cx.fillStyle = '#fff'; cx.beginPath(); cx.arc(q.x, q.y, r * 0.42, 0, 6.2832); cx.fill(); }
+      } else {
+        cx.globalAlpha = 0.9 * fade; cx.fillStyle = RED; cx.beginPath(); cx.arc(q.x, q.y, r, 0, 6.2832); cx.fill();
+      }
       scr.push({ x: q.x, y: q.y, r, c });
       if (c.n === 1 && alt < 0.012) { const tx = q.x + r + 5, ty = q.y + 4, w = c.list[0][0].length * 6.4; const gk = Math.floor(tx / 90) + ':' + Math.floor(ty / 16); if (!labSeen.has(gk) && !labSeen.has((Math.floor(tx / 90) + 1) + ':' + Math.floor(ty / 16))) { labSeen.add(gk); cx.globalAlpha = fade; cx.font = '600 11px system-ui,sans-serif'; cx.lineWidth = 3; cx.strokeStyle = 'rgba(0,0,0,.75)'; cx.fillStyle = '#fff'; cx.strokeText(c.list[0][0], tx, ty); cx.fillText(c.list[0][0], tx, ty); } }
     }
@@ -326,14 +452,43 @@
   // the bullseye lock-on, the hover highlight and the click all use the same rule, so what it locks onto is what you get
   function pickAt(x, y, touch) { const d = pickNear(x, y, touch ? 34 : 20); return d ? d.c : null; }
   const gEl = $('globe'), tip = document.createElement('div'); tip.id = 'dtip'; tip.className = 'tip hidden'; document.body.appendChild(tip);
-  gEl.addEventListener('pointermove', e => {
+  // ---- hover: one throttled pointer loop + a GPU-composited magnifier ----
+  // pointermove only stores the latest position (cheap). One requestAnimationFrame loop, capped at ~60 Hz, does the picking, the tooltip and the scope.
+  // The magnified dot is a single fixed element moved with translate3d and grown with a CSS transform transition (cubic-bezier), so hovering never
+  // redraws the canvas and never forces a layout.
+  var hmag = document.createElement('div'); hmag.id = 'hoverMag'; hmag.innerHTML = '<i></i>'; document.body.appendChild(hmag);
+  var hmagS = '', hoverArm = false;
+  function placeHoverMag() {
+    if (!hmag) return;
+    const d = hover ? scr.find(o => o.c === hover) : null;
+    if (!d || hoverArm) { if (!d) hmag.classList.remove('on'); return; }
+    hmag.style.transform = 'translate3d(' + d.x.toFixed(1) + 'px,' + d.y.toFixed(1) + 'px,0)';
+    const sc = (d.r * 4 / 16).toFixed(2); if (sc !== hmagS) { hmagS = sc; hmag.style.setProperty('--s', sc); }
+    hmag.classList.add('on');
+  }
+  function setHover(c) {
+    if (c === hover) return;
+    hover = c; hmag.classList.remove('on');
+    if (c) { hoverArm = true; requestAnimationFrame(() => { hoverArm = false; placeHoverMag(); }); }   // one frame "off", so every new dot grows from small
+  }
+  function tipHtml(c) { return c.live ? '<b>🔴 LIVE · ' + esc(c.live.title) + '</b><span>' + esc(c.live.channel + (c.live.place ? ' · ' + c.live.place : '')) + '</span>' : c.ev ? '<b>' + esc(c.ev.name) + '</b><span>' + esc([c.ev.venue, c.ev.city].filter(Boolean).join(' · ')) + '</span>' : '<b>' + (c.n > 1 ? c.n + ' stations' : esc(c.list[0][0]) + (c.list[0][15] ? ' · ' + esc(c.list[0][15]) : '')) + '</b><span>' + (c.n > 1 ? esc(c.list.slice(0, 3).map(s => s[0]).join(' · ')) + (c.n > 3 ? ' …' : '') : esc(c.list[0][12] || '')) + '</span>'; }
+  let pm = null, pmRaf = 0, pmLast = 0;
+  function kickPointer() { if (!pmRaf) pmRaf = requestAnimationFrame(pointerLoop); }
+  function pointerLoop(t) {
+    pmRaf = 0;
+    if (t - pmLast < 16) { kickPointer(); return; }   // at most ~60 picks a second, even with a 240 Hz mouse or screen
+    pmLast = t;
+    const m = pm; if (!m) return; pm = null;
+    ptr = [m.x, m.y];
+    if (!m.buttons) updateReticle(m.touch ? 34 : 20);
     if (centerMode) return;   // scope stays fixed at the centre on every device; the mouse just moves the Earth
-    if (e.buttons) { tip.classList.add('hidden'); return; }
-    const c = pickAt(e.clientX, e.clientY, e.pointerType === 'touch');
-    if (c !== hover) { hover = c; dirty = true; gEl.style.cursor = c ? 'pointer' : ''; }
-    if (c) { tip.innerHTML = c.live ? '<b>🔴 LIVE · ' + esc(c.live.title) + '</b><span>' + esc(c.live.channel + (c.live.place ? ' · ' + c.live.place : '')) + '</span>' : c.ev ? '<b>' + esc(c.ev.name) + '</b><span>' + esc([c.ev.venue, c.ev.city].filter(Boolean).join(' · ')) + '</span>' : '<b>' + (c.n > 1 ? c.n + ' stations' : esc(c.list[0][0]) + (c.list[0][15] ? ' · ' + esc(c.list[0][15]) : '')) + '</b><span>' + (c.n > 1 ? esc(c.list.slice(0, 3).map(s => s[0]).join(' · ')) + (c.n > 3 ? ' …' : '') : esc(c.list[0][12] || '')) + '</span>'; tip.style.left = Math.min(innerWidth - 300, e.clientX + 14) + 'px'; tip.style.top = (e.clientY + 14) + 'px'; tip.classList.remove('hidden'); } else tip.classList.add('hidden');
-  });
-  gEl.addEventListener('pointerleave', () => { if (centerMode) return; tip.classList.add('hidden'); hover = null; dirty = true; });
+    if (m.buttons) { tip.classList.add('hidden'); return; }
+    const c = pickAt(m.x, m.y, m.touch);
+    if (c !== hover) { setHover(c); gEl.style.cursor = c ? 'pointer' : ''; if (c) tip.innerHTML = tipHtml(c); }
+    if (c) { tip.style.left = '0px'; tip.style.top = '0px'; tip.style.transform = 'translate3d(' + Math.min(innerWidth - 300, m.x + 14) + 'px,' + (m.y + 14) + 'px,0)'; tip.classList.remove('hidden'); } else tip.classList.add('hidden');
+  }
+  gEl.addEventListener('pointermove', e => { pm = { x: e.clientX, y: e.clientY, buttons: e.buttons, touch: e.pointerType === 'touch' }; kickPointer(); });
+  gEl.addEventListener('pointerleave', () => { if (centerMode) return; tip.classList.add('hidden'); setHover(null); });
   let down = null;
   gEl.addEventListener('pointerdown', e => { down = [e.clientX, e.clientY]; ptr = [e.clientX, e.clientY]; updateReticle(e.pointerType === 'touch' ? 34 : 20); });
   gEl.addEventListener('pointerup', e => { if (down && Math.hypot(e.clientX - down[0], e.clientY - down[1]) < 5) { const c = pickAt(e.clientX, e.clientY, e.pointerType === 'touch'); if (c) onCell(c); } down = null; });
@@ -347,7 +502,6 @@
     const d = pickNear(ptr[0], ptr[1], rad || 20), x = d ? d.x : ptr[0], y = d ? d.y : ptr[1];
     bz.style.transform = 'translate(' + (x - 56).toFixed(1) + 'px,' + (y - 56).toFixed(1) + 'px)'; bz.classList.toggle('lock', !!d);
   }
-  gEl.addEventListener('pointermove', e => { ptr = [e.clientX, e.clientY]; if (!e.buttons) updateReticle(e.pointerType === 'touch' ? 34 : 20); });
 
   // ---------- Radio Garden style: scroll the globe and the dot under the centre scope is selected; let go and it settles onto it and plays ----------
   let centerMode = true, drag = false, dragMoved = false, snapping = false, autoPick = null, snapT = 0, lastPtr = null;
@@ -368,7 +522,7 @@
     { const cp = globe.camera().position, now = performance.now(); if (spPos) { const alt = globe.pointOfView().altitude, px = innerHeight / (0.93 * 100 * (1 + alt)); camSpeed = cp.distanceTo(spPos) * px / Math.max(0.001, (now - spT) / 1000); } spPos = cp.clone(); spT = now; }
     autoPick = centerPick();
     const h = autoPick ? autoPick.c : null;
-    if (h !== hover) { hover = h; dirty = true; }
+    setHover(h);
     if (autoPick && autoPick.d <= SNAP_R() && camSpeed < 260 && !(innerWidth <= 820 && !$('panel').classList.contains('hidden')) && ((autoPick.c !== tipKey && (tipKey = autoPick.c, tipSince = performance.now(), true)) || performance.now() - tipSince < 3000)) { tip.innerHTML = tipFor(autoPick.c); placeTip(); tip.classList.remove('hidden'); }
     else { tip.classList.add('hidden'); if (!autoPick || autoPick.d > SNAP_R()) tipKey = null; }
     updateReticle();
@@ -421,7 +575,7 @@
   gEl.addEventListener('pointerdown', e => {
     gptrs = e.isPrimary ? 1 : gptrs + 1; stopFling(); gsamp = [];
     if (gptrs > 1) { grab = null; return; }   // pinch: leave it to the zoom control
-    ctl.autoRotate = false; autoRotate = false; $('rotate').style.opacity = .5;
+    ctl.autoRotate = false;   // paused while dragging; resumes by itself
     grab = rayHit(e.clientX, e.clientY) ? [e.clientX, e.clientY] : null;
   });
   addEventListener('pointermove', e => {
@@ -590,15 +744,16 @@
 
   // ---------- Lock: the MUSIC is locked (no station change from Random, clicks, searches, snapping, Social Live...); spin and zoom the globe freely ----------
   let locked = false;
-  const lockMsg = () => toast('🔒 Music is locked · tap 🔒 to unlock');
+  const lockMsg = () => toast('🔒 Music locked');
   function setLock(on) {
     locked = on; document.body.classList.toggle('locked', on); const b = $('lockBtn'); b.textContent = on ? '🔒' : '🔓'; b.classList.toggle('on', on); b.title = on ? 'Music locked: tap to unlock' : 'Lock the music (you can still spin the globe)';
-    toast(on ? '🔒 Music locked' + (current ? ' on ' + current[0] : '') + ' · you can still spin and zoom' : '🔓 Unlocked');
+    toast(on ? '🔒 Music locked' : '🔓 Unlocked');   // short, and shown above the control panel, so it never covers the station name
   }
-  // the lock button floats just above the Save song button, nearly see-through
-  const placeLock = () => { const sv = $('saveSong'), b = $('lockBtn'), sl = $('lockSlot'); if (!sv || !b) return; const sr = sl && sl.getBoundingClientRect(); if (sr && sr.width) { b.style.left = Math.round(sr.left + sr.width / 2 - b.offsetWidth / 2) + 'px'; b.style.top = Math.round(sr.top + sr.height / 2 - b.offsetHeight / 2) + 'px'; return; } const r = sv.getBoundingClientRect(); if (!r.width) return; b.style.left = Math.round(r.left + r.width / 2 - b.offsetWidth / 2) + 'px'; b.style.top = Math.round(r.top - b.offsetHeight - 6) + 'px'; };
+  // desktop: the lock button floats in the bar beside the volume meter; phones/tablets: it is a real button inside the control panel beside Save song (see style.css)
+  const placeLock = () => { const sv = $('saveSong'), b = $('lockBtn'), sl = $('lockSlot'); if (!sv || !b) return; const phone = innerWidth <= 820; if (phone && b.parentNode !== $('player')) $('player').appendChild(b); else if (!phone && b.parentNode !== document.body) document.body.appendChild(b); if (phone) return; const sr = sl && sl.getBoundingClientRect(); if (sr && sr.width) { b.style.left = Math.round(sr.left + sr.width / 2 - b.offsetWidth / 2) + 'px'; b.style.top = Math.round(sr.top + sr.height / 2 - b.offsetHeight / 2) + 'px'; return; } const r = sv.getBoundingClientRect(); if (!r.width) return; b.style.left = Math.round(r.left + r.width / 2 - b.offsetWidth / 2) + 'px'; b.style.top = Math.round(r.top - b.offsetHeight - 6) + 'px'; };
   { const pl = $('player'); try { new ResizeObserver(placeLock).observe(pl); } catch (e) {} addEventListener('resize', placeLock); setInterval(placeLock, 1000); placeLock(); }
   $('lockBtn').onclick = () => setLock(!locked);
+  { const ab = $('attrBtn'), at = $('attrTxt'); if (ab && at) { ab.onclick = () => { at.hidden = !at.hidden; clearTimeout(ab._t); if (!at.hidden) ab._t = setTimeout(() => { at.hidden = true; }, 12000); }; } }   // credits: hidden behind a small (i), tap to read
 
   // ---------- Live now: DJ sets streaming right now + tonight's events ----------
   let djOpen = false, liveData = { items: [] }, socialData = { items: [] }, djIndex = { djs: [] }, djProf = { djs: [] }, liveQ = '', evData = { items: [] }, liveItems = [], evItems = [], liveTab = 'yt', liveOpen = false, watching = null, liveFam = '';
@@ -697,7 +852,7 @@
     if (locked) { lockMsg(); return; }
     audio.pause(); if (hls) { hls.destroy(); hls = null; } ytStop(); $('pplay').textContent = '▶';
     watching = r; if (djOpen) renderDJMixes(); else openLive(liveTab);
-    if (r.lat != null) { ctl.autoRotate = false; autoRotate = false; globe.pointOfView({ lat: r.lat, lng: r.lon, altitude: 0.5 }, 1200); }
+    if (r.lat != null) {  globe.pointOfView({ lat: r.lat, lng: r.lon, altitude: 0.5 }, 1200); }
   }
   $('pdetail').addEventListener('click', e => {
     const t = e.target.closest('[data-lt]'); if (t) { liveTab = t.dataset.lt; liveQ = ''; autoWatch(liveTab); return; }
@@ -821,8 +976,8 @@
   }
   async function copy(txt, what) { try { await navigator.clipboard.writeText(txt); toast(what + ' copied'); } catch (e) { prompt('Copy:', txt); } }
   function flyTo(s) { return;   // zoom-in on station click removed (Billy, 2026-10-12); delete this line to bring it back
-    if (s[2] == null) return; ctl.autoRotate = false; autoRotate = false; globe.pointOfView({ lat: s[2], lng: s[3], altitude: 0.1 }, 1600); }
-  function zoomTo(s) { ctl.autoRotate = false; autoRotate = false; globe.pointOfView({ lat: s[2], lng: s[3], altitude: 0.004 }, 2600); }
+    if (s[2] == null) return;  globe.pointOfView({ lat: s[2], lng: s[3], altitude: 0.1 }, 1600); }
+  function zoomTo(s) {  globe.pointOfView({ lat: s[2], lng: s[3], altitude: 0.004 }, 2600); }
   function detail(s) {
     current = s;
     const row = (k, v) => v ? '<div class="kv"><span>' + k + '</span><b>' + v + '</b></div>' : '';
@@ -1013,7 +1168,7 @@
     const b = e.target.closest('.tk'); if (!b) return; const s = hist[+b.dataset.i]; if (!s) return;
     if (locked && current && s[13] !== current[13]) { lockMsg(); return; }
     randomMode = false; play(s, false); hist = hist.filter(x => x[13] !== s[13]); renderHist(); toast('Back to ' + s[0]);
-    if (s[2] != null) { ctl.autoRotate = false; autoRotate = false; $('rotate').style.opacity = .5; stopFling(); const pov = globe.pointOfView(), dl = ((((s[3] - pov.lng) % 360) + 540) % 360) - 180; globe.pointOfView({ lat: s[2], lng: pov.lng + dl, altitude: pov.altitude }, 1200); }
+    if (s[2] != null) {  stopFling(); const pov = globe.pointOfView(), dl = ((((s[3] - pov.lng) % 360) + 540) % 360) - 180; globe.pointOfView({ lat: s[2], lng: pov.lng + dl, altitude: pov.altitude }, 1200); }
   });
   function play(s, fly) {
     if (locked && current && s && s[13] !== current[13]) { lockMsg(); return; }   // the music is locked on this station
@@ -1103,10 +1258,21 @@
     if (roloOn) { rolo.spinTo(s, () => {}); return; }
     play(s, true); if (innerWidth <= 820) $('panel').classList.add('hidden'); else openPanel([s], s[0], s[12] || '');   // the info card would block the view on phones/tablets
     if (s[2] != null) {   // swing the Earth round to the station and ease in just a touch
-      ctl.autoRotate = false; autoRotate = false; $('rotate').style.opacity = .5; stopFling(); tip.classList.add('hidden');
+       stopFling(); tip.classList.add('hidden');
       const pov = globe.pointOfView(), dl = ((((s[3] - pov.lng) % 360) + 540) % 360) - 180;
-      globe.pointOfView({ lat: s[2], lng: pov.lng + dl, altitude: pov.altitude > 1.1 ? Math.max(1.0, pov.altitude * 0.85) : pov.altitude }, 1500);
+      globe.pointOfView({ lat: s[2], lng: pov.lng + dl, altitude: randomZoomAlt() }, 1500);
     }
+  }
+  // Random zoom rhythm: press 1 = one step in, 2 = two steps, 3 = three steps; then 3 steps back out (presses 4-6) and 3 steps back in (7-9), and so on. Zooming by hand starts the count again.
+  const rz = { n: 0, base: 1.7, exp: 0 };
+  function randomZoomAlt() {
+    const alt = globe.pointOfView().altitude;
+    const settled = Date.now() - (rz.t || 0) > 2500;   // pressing again mid-glide keeps the rhythm
+    if (rz.n === 0 || !rz.exp || (settled && Math.abs(alt - rz.exp) / rz.exp > 0.25)) { rz.n = 0; rz.base = alt; }
+    rz.n++; rz.t = Date.now();
+    const lvl = rz.n <= 3 ? rz.n : [2, 1, 0, 1, 2, 3][(rz.n - 4) % 6];
+    rz.exp = Math.max(0.2, rz.base * Math.pow(0.62, lvl));
+    return rz.exp;
   }
   $('scopepill').onclick = () => { setScope(null); if (roloOn) $('roloClear').click(); toast('Random is worldwide again'); };
   $('random').onclick = () => { randomMode = true; tries = 0; randomStation(); };
@@ -1120,8 +1286,17 @@
   document.querySelector('#player .info').addEventListener('click', toggleInfo); $('plogo').addEventListener('click', toggleInfo);
   $('randomBar').onclick = () => $('random').click();
   $('rotate').onclick = () => { autoRotate = !autoRotate; ctl.autoRotate = autoRotate; $('rotate').style.opacity = autoRotate ? 1 : .5; };
-  $('spaceBtn').onclick = () => { if (roloOn) { rolo.toggle(false); setSpaced(false, true); } else if (spaced) rolo.toggle(true); else setSpaced(true, true); };   // Earth -> Ghost -> Rolodex -> Earth
-  // ---------- always open in Ghost view with 1UP Radio playing ----------
+  // The world always spins, unless you press Spin to switch it off. It pauses while you drag/fling it, then carries on; slower when zoomed in close.
+  setInterval(() => { try { if (autoRotate && !ctl.autoRotate && !grab && !flingRaf) ctl.autoRotate = true; const al = globe.pointOfView().altitude; ctl.autoRotateSpeed = 0.35 * Math.min(1, Math.max(0.08, al / 1.7)); } catch (e) {} }, 300);
+  $('spaceBtn').onclick = () => {   // Celestial -> Nebula -> Earth -> Ghost -> Rolodex -> Celestial (the app always opens in Celestial)
+    if (roloOn) { rolo.toggle(false); nebOn = false; skyOn = true; applyNebula(false); setSpaced(false, true); }
+    else if (spaced) rolo.toggle(true);
+    else if (skyOn) { skyOn = false; nebOn = true; setSpaced(false, true); applyNebula(true); }
+    else if (nebOn) { nebOn = false; applyNebula(false); setSpaced(false, true); }
+    else setSpaced(true, true);
+  };
+  // ---------- always open in the Celestial view with a station playing ----------
+  skyOn = true;
   setSpaced(false);
   {
     const up = S.find(isUP);
@@ -1133,7 +1308,11 @@
       try { if (yt && yt.unMute) { yt.unMute(); yt.setVolume(Math.round(+$('vol').value * 100)); if (!ytPlaying) yt.playVideo(); } else if (up && !ytOn) play(up, false); } catch (e) {}
       muted = false;
     };
-    ['pointerdown', 'keydown', 'touchstart'].forEach(ev => addEventListener(ev, () => { if (tap.style.display !== 'none' || muted) unlock(); }, { passive: true }));
+    // Phones only count a tap as a "gesture" when the finger is lifted (pointerup / touchend / click), so the sound must be started on release;
+    // pointerdown / touchstart alone are ignored by Chrome and Safari and the stream stayed muted. The pill itself is tappable too.
+    const tapGo = () => { if (tap.style.display !== 'none' || muted) { unlock(); if (!muted) tap.style.display = 'none'; } };
+    ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'].forEach(ev => addEventListener(ev, tapGo, { passive: true, capture: true }));
+    tap.addEventListener('click', e => { e.stopPropagation(); unlock(); tap.style.display = 'none'; });
     // every visit opens with a little spin and locks onto energetic music (hip-hop, country, rock, 80s, electronic); now and then Billy Legal or 1UP Radio
     const bad0 = new Set(lsGet('rg-bad')), goodIds = new Set(lsGet('rg-good')), bl = S.find(isBL), poolCache = {};
     const poolOf = k => poolCache[k] || (poolCache[k] = (() => {
@@ -1143,7 +1322,7 @@
     const energetic = () => { const ks = Object.keys(ENERGY), p = poolOf(ks[(Math.random() * ks.length) | 0]); if (!p.length) return null; const gl = p.filter(s => goodIds.has(s[13])), src = gl.length >= 3 && Math.random() < 0.7 ? gl : p; return src[(Math.random() * src.length) | 0]; };
     const r0 = Math.random(), first = bl && r0 < 0.08 ? bl : up && r0 < 0.16 ? up : energetic() || up;
     const openSpin = (s, glide) => {   // one full turn of the Earth that ends with the bullseye on the station (a retry just glides there)
-      if (!s || s[2] == null) return; ctl.autoRotate = false; autoRotate = false; $('rotate').style.opacity = .5;
+      if (!s || s[2] == null) return; 
       if (glide) { const pov = globe.pointOfView(), dl = ((((s[3] - pov.lng) % 360) + 540) % 360) - 180; globe.pointOfView({ lat: s[2], lng: pov.lng + dl, altitude: pov.altitude }, 1200); return; }
       setTimeout(() => { const alt = globe.pointOfView().altitude; globe.pointOfView({ lat: s[2], lng: s[3] - 340, altitude: alt }, 0); setTimeout(() => globe.pointOfView({ lat: s[2], lng: s[3], altitude: alt }, 2800), 80); }, 900);
     };
@@ -1152,12 +1331,12 @@
       const early = window.__early && S.find(x => x[13] === window.__early.id); window.__early = null;
       const pick = () => { if (early && n === 0) { startCur = early; play(early, false); openSpin(early, false); return; } const s = n === 0 ? first : energetic() || first; startCur = s; play(s, false); openSpin(s, n > 0); };
       startElec = () => { if (++n < 8) pick(); };
-      ctl.autoRotate = false; autoRotate = false; $('rotate').style.opacity = .5;
+      
       pick();
       $('panel').classList.add('hidden');   // opens with the info card closed; tap the station name/logo to open it
     } else if (first) {
       play(first, false); openSpin(first); $('panel').classList.add('hidden');
-      ctl.autoRotate = false; autoRotate = false; $('rotate').style.opacity = .5;
+      
       setTimeout(() => {   // browsers block sound before the first tap: fall back to muted autoplay, then unmute on the first touch
         if (ytPlaying || (ytMode !== 'up' && ytMode !== 'bl')) return;
         try { if (yt && yt.mute) { yt.mute(); yt.playVideo(); muted = true; } } catch (e) {}
@@ -1254,7 +1433,7 @@
   function placeLabel(p) { return p.kind === 'country' ? p.name : p.name + (/^[A-Z]{2}$/.test(p.c[5]) ? ', ' + p.c[5] : '') + ', ' + (ccName[p.cc] || p.cc); }
   function kmBetween(la1, lo1, la2, lo2) { const r = Math.PI / 180, dl = (la2 - la1) * r, dn = (lo2 - lo1) * r, a = Math.sin(dl / 2) ** 2 + Math.cos(la1 * r) * Math.cos(la2 * r) * Math.sin(dn / 2) ** 2; return 12742 * Math.asin(Math.sqrt(a)); }
   function goPlace(p) {
-    if (!roloOn) { $('panel').classList.remove('hidden'); $('pdetail').classList.add('hidden'); } ctl.autoRotate = false; autoRotate = false;
+    if (!roloOn) { $('panel').classList.remove('hidden'); $('pdetail').classList.add('hidden'); } 
     const showList = (list, title, sub) => roloOn ? rolo.showCustom(list, title) : openPanel(list, title, sub);
     if (p.kind === 'city') {
       const [nm, , la, lo] = p.c; const radius = p.c[6] > 2e6 ? 60 : p.c[6] > 4e5 ? 40 : 25;
@@ -1622,7 +1801,7 @@
   if (h && !/^s=/.test(h)) { const g = G.find(x => x.name.toLowerCase() === h.toLowerCase()); if (g) filter = { kind: 'genre', id: g.id }; else if (fams.includes(h)) filter = { kind: 'family', fam: h }; else if (SETS[h]) filter = { kind: 'set', key: h }; }
   buildGenres(); applyFilter();
   const sm = /^s=([^&]+)/.exec(h), altp = /[&?]alt=([\d.]+)/.exec(h);
-  if (sm) { const s = S.find(x => x[13] === sm[1]); if (s) { openPanel([s], s[0], s[12] || ''); detail(s); setPlayerLogo(s); $('pname').textContent = s[0]; $('pmeta').textContent = 'Shared station · press ▶ to listen'; $('pplay').disabled = !s[1]; $('shareBtn').disabled = false; globe.pointOfView({ lat: s[2], lng: s[3], altitude: altp ? +altp[1] : 0.4 }, 0); ctl.autoRotate = false; autoRotate = false; $('pplay').onclick = () => { play(s); $('pplay').onclick = prevPlayClick; }; } }
+  if (sm) { const s = S.find(x => x[13] === sm[1]); if (s) { openPanel([s], s[0], s[12] || ''); detail(s); setPlayerLogo(s); $('pname').textContent = s[0]; $('pmeta').textContent = 'Shared station · press ▶ to listen'; $('pplay').disabled = !s[1]; $('shareBtn').disabled = false; globe.pointOfView({ lat: s[2], lng: s[3], altitude: altp ? +altp[1] : 0.4 }, 0);  $('pplay').onclick = () => { play(s); $('pplay').onclick = prevPlayClick; }; } }
   if (DG) {
     addEventListener('error', e => DG.errs.push((e.message || 'error') + ' @' + String(e.filename || '').split('/').pop() + ':' + e.lineno));
     addEventListener('unhandledrejection', e => DG.errs.push('promise: ' + String(e.reason && e.reason.message || e.reason).slice(0, 80)));
