@@ -1027,7 +1027,8 @@
     if (p >= ytQ.length) { ytQ = shuffleArr(ytSongs); p = 0; } if (p < 0) p = 0;
     ytPos = p; const sg = ytQ[p]; ytShow(sg[1]); ytTrack('Billy Legal - ' + sg[1], sg[0]); yt.loadVideoById(sg[0]);
   }
-  // 1UP Radio: follows the live schedule published at 1upradio.com
+  // 1UP Radio: follows the live schedule published at billylegal.github.io/1upradio
+  const UP_SCHEDULE = 'https://billylegal.github.io/1upradio/schedule.json';
   const upNow = () => { let k = 0; const src = Date.now() / 1000 - (upS.delay || 0); for (let i = 0; i < upS.plays.length; i++) { if (upS.plays[i].t <= src) k = i; else break; } return k; };
   const ytNow = { t: '', id: '', sid: '' };   // song currently on the 1UP Radio / Billy Legal Radio YouTube player (for the save button)
   const ytTrack = (t, id) => { ytNow.t = t; ytNow.id = id; ytNow.sid = current ? current[13] : ''; try { npPoll(); } catch (e) {} };
@@ -1059,7 +1060,7 @@
     else upPlayIdx(n, Math.max(0, -wait));
   }
   async function upStart() {
-    if (!upS) upS = await (await fetch('https://1upradio.com/schedule.json?t=' + Date.now())).json();
+    if (!upS) upS = await (await fetch(UP_SCHEDULE + '?t=' + Date.now())).json();
     const k = upNow(); upIdx = k; return [k, Date.now() / 1000 - (upS.delay || 0) - upS.plays[k].t];
   }
   const ytNext = () => { if (ytMode === 'up') upNext(); else ytPlayPos(ytPos + 1); };
@@ -1079,7 +1080,7 @@
   setInterval(async () => {
     if (!ytOn || ytMode !== 'up' || !upS) return;
     try {
-      const cur = upS.plays[upIdx] && upS.plays[upIdx].t, fresh = await (await fetch('https://1upradio.com/schedule.json?t=' + Date.now())).json();
+      const cur = upS.plays[upIdx] && upS.plays[upIdx].t, fresh = await (await fetch(UP_SCHEDULE + '?t=' + Date.now())).json();
       upS = fresh; if (cur != null) { const k = upS.plays.findIndex(p => p.t === cur); if (k >= 0) upIdx = k; }
     } catch (e) {}
   }, 180000);
