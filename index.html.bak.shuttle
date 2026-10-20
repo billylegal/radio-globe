@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#02050c">
+<meta name="description" content="Radio Globe: tune live radio from anywhere on a 3D globe.">
+<link rel="canonical" href="https://aviewfromspace.com/"><meta property="og:type" content="website"><meta property="og:url" content="https://aviewfromspace.com/"><meta property="og:title" content="Radio Globe · A View From Space"><meta property="og:description" content="Spin the Earth and tune live radio from anywhere. 50,000+ stations, live DJs and streams."><meta property="og:image" content="https://aviewfromspace.com/assets/icon/og-image.png"><meta name="twitter:card" content="summary"><meta name="twitter:image" content="https://aviewfromspace.com/assets/icon/og-image.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="icon" href="favicon.ico" sizes="any"><link rel="icon" href="assets/icon/radio-globe.svg" type="image/svg+xml">
+<link rel="icon" href="assets/icon/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="assets/icon/apple-touch-icon.png" sizes="180x180">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Radio Globe"><meta name="mobile-web-app-capable" content="yes">
+<title>Radio Globe</title>
+<link rel="stylesheet" href="style.css?v=1792519009">
+</head>
+<body>
+<div id="globe"></div>
+
+<div id="bullseye"><svg viewBox="-56 -56 112 112" width="112" height="112" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round">
+  <circle r="10"/>
+  <path d="M0-47V-10M0 10V47M-47 0H-10M10 0H47"/>
+  <circle r="2.4" fill="#39ff14" stroke="none"/>
+</svg></div>
+<div id="loading">
+  <div class="ld-stars" aria-hidden="true"></div>
+  <div class="ld-card">
+    <div class="ld-orb" aria-hidden="true"><svg viewBox="-56 -56 112 112" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"><circle r="10"/><path d="M0-47V-10M0 10V47M-47 0H-10M10 0H47"/><circle r="2.8" fill="#39ff14" stroke="none"/></svg><i></i></div>
+    <div class="ld-by">brought to you by</div>
+    <div class="ld-name" id="ldName" aria-label="A VIEW FROM SPACE"></div>
+    <div class="ld-line" aria-hidden="true"></div>
+    <div class="ld-time" id="ldTime" aria-live="off">--:--:--</div>
+    <div class="ld-place" id="ldPlace"></div>
+    <div class="ld-date" id="ldDate"></div>
+    <div id="loadmsg">Loading stations…</div>
+  </div>
+  <button id="ldStart" type="button" disabled><span>PUSH START</span></button>
+  <i class="ld-c ld-tl"></i><i class="ld-c ld-tr"></i><i class="ld-c ld-bl"></i><i class="ld-c ld-br"></i><div class="ld-scan" aria-hidden="true"></div>
+</div>
+<script>
+// Startup screen: the visitor's own local time and place, from the device's time zone (no location lookup, nothing is sent anywhere).
+(function () {
+  var name = document.getElementById('ldName'), time = document.getElementById('ldTime'), place = document.getElementById('ldPlace'), dateEl = document.getElementById('ldDate');
+  if (!name) return;
+  var txt = 'A VIEW FROM SPACE'; name.innerHTML = txt.split('').map(function (ch, i) { return '<span style="animation-delay:' + (0.15 + i * 0.055).toFixed(2) + 's">' + (ch === ' ' ? '&nbsp;' : ch) + '</span>'; }).join('');
+  var tz = ''; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) {}
+  var city = tz.indexOf('/') > 0 ? tz.split('/').pop().replace(/_/g, ' ') : '';
+  function tick() {
+    var d = new Date(), h = d.getHours(), g = h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+    try { time.textContent = d.toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }); } catch (e) { time.textContent = d.toTimeString().slice(0, 8); }   // 24-hour clock
+    var day = ''; try { day = d.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' }); } catch (e) {}
+    place.textContent = city ? g + ' from ' + city : g; dateEl.textContent = day;   // the date sits on its own centred line
+  }
+  tick(); var iv = setInterval(function () { if (!document.getElementById('loading') || document.getElementById('loading').classList.contains('hidden')) clearInterval(iv); else tick(); }, 1000);
+})();
+</script>
+
+<aside id="side">
+  <div class="brand"><span class="logo">◉</span> Radio Globe <button id="themeBtn" title="Theme colors"><i class="tdot"></i> Theme</button><button id="sideClose" title="Close genres" aria-label="Close genres">✕</button></div>
+  <div class="powered">powered by <a href="https://aviewfromspace.com" target="_blank" rel="noopener">A View From Space</a></div>
+  <input id="gsearch" type="search" placeholder="Search genres… (house, jazz, salsa)" autocomplete="off">
+  <div id="specials"><button id="livebtn" title="Live right now on YouTube, Twitch and Kick (TikTok and Instagram open on their own sites)"><i class="ldot"></i> SOCIAL LIVE <span id="livecount"></span></button></div>
+  <div id="bands"></div>
+  <label class="chk"><input type="checkbox" id="playable"> Playable only (hide broadcast-only listings)</label>
+  <div id="genres"></div>
+</aside>
+
+<div id="searchwrap">
+  <input id="ssearch" type="search" placeholder="Search stations, cities, countries…" autocomplete="off">
+  <div id="sresults" class="hidden"></div>
+</div>
+<div id="sideScrim"></div>
+<div id="topbar">
+  <button id="menuBtn" title="Genres and filters">☰ Genres</button>
+  <button id="random" title="Random station in this genre (N)">🎲 Random</button>
+  <button id="rotate" title="Toggle auto-rotate">Spin</button>
+  <button id="spaceBtn" title="Ghost: hide the globe, show only the station dots">👻 Ghost</button>
+  <button id="songsTop" title="Songs you saved from radio stations">🎵 Songs <span id="songsN">0</span></button>
+  <button id="favtop" title="Your favorites">★ Favorites <span id="favtopn">0</span></button>
+</div>
+<div id="themepop" class="hidden"><h4>Theme color</h4><div class="sw" id="themesw"></div></div>
+</div>
+
+<section id="panel" class="hidden">
+  <header><div><div id="ptitle"></div><div id="psub"></div></div><button id="pclose">✕</button></header>
+  <div id="pdetail" class="hidden"></div>
+  <div id="plist"></div>
+</section>
+
+<section id="favdrawer">
+  <header><div class="ft">★ Favorites <span id="favcount">0</span></div>
+    <label class="chk"><input type="checkbox" id="favonly"> Show only favorites on the globe</label>
+    <button id="favclose" title="Close">⌄</button></header>
+  <div id="favlist"></div>
+</section>
+
+<footer id="player">
+  <div id="plogo"></div>
+  <div class="info"><div id="pname">Pick a glowing dot on the globe</div><div id="pmeta">Rotate, zoom, choose a genre</div><div id="pnow"></div></div>
+  <button id="favBtn" class="sbtn" disabled title="Favorite this station">☆</button>
+  <button id="saveSong" class="sbtn" title="Save the song that is playing"><svg class="ni" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z"/></svg><span class="nt"><b>SAVE</b><b>SONG</b></span></button>
+  <button id="shareBtn" class="sbtn" disabled title="Share this station"><svg class="shic" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="2.7"/><circle cx="6" cy="12" r="2.7"/><circle cx="18" cy="19" r="2.7"/><path d="M8.4 10.7l7.2-4.1M8.4 13.3l7.2 4.1"/></svg></button>
+  <button id="randomBar" class="sbtn" title="Random station (N)">🎲</button>
+  <button id="pplay" disabled>▶</button>
+  <span id="lockSlot" aria-hidden="true"></span>
+  <span id="volIco" aria-hidden="true">🔊</span>
+  <input id="vol" type="range" min="0" max="1" step="0.01" value="0.8" title="Volume">
+</footer>
+
+<section id="songs" class="hidden">
+  <header><div class="ft">🎵 My Songs <span id="songsCount">0</span></div><div class="sbar"><button id="songsCopy" title="Copy the list">Copy</button><button id="songsDl" title="Download as CSV">CSV</button><button id="songsClose" title="Close">✕</button></div></header>
+  <div id="songsList"></div>
+</section>
+
+<div id="attr"><span id="attrTxt" hidden>Imagery © Esri, Maxar, Earthstar Geographics · NASA Blue Marble · Stations: radio-browser.info, Wikidata · Cities: GeoNames</span><button id="attrBtn" type="button" aria-label="Credits" title="Credits">ⓘ</button></div>
+<div id="ytbox" aria-hidden="true"><div id="ytplayer"></div></div>
+<div id="stat"></div><button id="scopepill" class="hidden" type="button" title="Random stays in this place. Tap to go worldwide again."></button>
+<div id="toast" class="hidden"></div>
+<audio id="audio" preload="auto"></audio>
+<script>
+/* Early start: begin loading a station that worked on a previous visit before the big app has even loaded */
+(function () { try {
+  var l = JSON.parse(localStorage.getItem('rg-fast') || '[]').filter(function (x) { return x[2] === 1; }); if (!l.length || Math.random() > 0.6) return;   // only stations known to be energetic
+  var pick = l[Math.floor(Math.random() * l.length)], a = document.getElementById('audio');
+  window.__early = { id: pick[0], url: pick[1] }; a.src = pick[1]; var p = a.play(); if (p && p.catch) p.catch(function () { a.muted = true; window.__needUnmute = true; var q = a.play(); if (q && q.catch) q.catch(function () {}); });
+} catch (e) {} })();
+</script>
+
+<script src="vendor/globe.gl.min.js"></script>
+<script src="vendor/hls.min.js"></script>
+<script src="app.js?v=1792519009"></script>
+<div class="sh"><div class="shx"><a class="shy" href="https://omarchystore.com" target="_blank" rel="noopener" title="Omarchy Store" aria-label="Omarchy Store"><svg class="fl" viewBox="0 0 100 40" aria-hidden="true"><defs><linearGradient id="fo2" x1="0" x2="1"><stop offset="0" stop-color="#ffd23a"/><stop offset=".45" stop-color="#ff7a00"/><stop offset="1" stop-color="#ff2a00" stop-opacity="0"/></linearGradient><linearGradient id="fm2" x1="0" x2="1"><stop offset="0" stop-color="#fff6b0"/><stop offset=".5" stop-color="#ffd23a"/><stop offset="1" stop-color="#ff9a00" stop-opacity="0"/></linearGradient></defs><path class="o" d="M0 5C26 0 58 11 100 20C58 29 26 40 0 35Z" fill="url(#fo2)"/><path class="m" d="M0 11C22 8 46 14 74 20C46 26 22 32 0 29Z" fill="url(#fm2)"/><path class="c" d="M0 15C16 14 32 17 48 20C32 23 16 26 0 25Z" fill="#fff"/></svg><img src="assets/omarchy-store.png" alt="" width="96" height="69"></a></div></div>
+<div class="un"><div class="ux"><a class="uy" href="https://1upradio.com" target="_blank" rel="noopener" title="1UP Radio - keep the volume up" aria-label="1UP Radio"><img src="assets/1up-sticker.png" alt="" width="78" height="78"></a></div></div>
+<button id="lockBtn" title="Lock the music (you can still spin the globe)" aria-label="Lock the music">🔓</button>
+</body>
+</html>

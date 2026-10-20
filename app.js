@@ -219,7 +219,7 @@
     cvx.innerHTML = '<svg class="cvW"><path id="cvW1"/><path id="cvW2"/></svg>'
       + '<a class="cvB" href="https://billylegal.com" target="_blank" rel="noopener" title="Billy Legal" aria-label="Billy Legal"><span class="cvI"><img src="assets/head.png" alt=""></span></a>'
       + '<a class="cvU" href="https://1upradio.com" target="_blank" rel="noopener" title="1UP Radio" aria-label="1UP Radio"><span class="cvI"><img src="assets/1up-sticker.png" alt=""></span></a>'
-      + '<a class="cvS" href="https://omarchystore.com" target="_blank" rel="noopener" title="Omarchy Store" aria-label="Omarchy Store"><span class="cvI">' + flame + '<img src="assets/omarchy-store.png" alt=""></span></a>';
+      + '<a class="cvS" href="https://omarchystore.com" target="_blank" rel="noopener" title="Omarchy Store" aria-label="Omarchy Store"><span class="cvI">' + flame + '<img src="assets/omarchy-store-v2.png" alt=""></span></a>';
     document.body.appendChild(cvx);
     cvx.S = cvx.querySelector('.cvS'); cvx.U = cvx.querySelector('.cvU'); cvx.B = cvx.querySelector('.cvB'); cvx.W1 = cvx.querySelector('#cvW1'); cvx.W2 = cvx.querySelector('#cvW2');
   }
